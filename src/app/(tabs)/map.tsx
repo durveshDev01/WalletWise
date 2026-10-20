@@ -1,20 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Keyboard, Linking, Platform, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Keyboard, Linking, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import MapView, { Circle, Marker, UrlTile } from '../../components/maps/NativeMap';
-import type { Region } from '../../components/maps/NativeMap';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { FlatList, Gesture, GestureDetector, ScrollView } from 'react-native-gesture-handler';
-import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { useRouter } from 'expo-router';
 
 import { CardArt } from '../../components/CardArt';
 import { Icon } from '../../components/Icon';
+import { MapboxMap } from '../../components/maps/MapboxMap';
+import type { MapboxMapHandle, MapMarker, MapState } from '../../components/maps/MapboxMap';
 import { PlacePanel } from '../../components/PlacePanel';
 import type { RankMode } from '../../components/PlacePanel';
 import { enrichPlace, RADIUS_OPTIONS, useBestCardLogic } from '../../hooks/useBestCardLogic';
 import type { EnrichedPlace } from '../../hooks/useBestCardLogic';
-import { MAPBOX_TILE_URL, SPEND_FILTERS } from '../../services/mapbox';
+import { HAS_MAPBOX_TOKEN, MAPBOX_TOKEN, SPEND_FILTERS } from '../../services/mapbox';
 import type { MapPlace, SpendFilter } from '../../services/mapbox';
 import { useCardStore } from '../../store/useCardStore';
 import { theme } from '../../theme';
@@ -23,18 +22,16 @@ import type { MerchantCategory } from '../../utils/merchantClassifier';
 import type { RecommendationResult } from '../../utils/recommendationEngine';
 
 /**
- * Android draws the map with Google Maps, which needs an API key in the build (see
- * app.config.ts). Expo Go has its own key. Without one the map would crash the app, so
- * places are shown as a list only.
+ * The map is Mapbox's own (Mapbox GL JS in a WebView, see components/maps), so it needs only
+ * the Mapbox token: no Google Maps key, and it works the same in Expo Go and in the APK.
  */
-const MAP_AVAILABLE =
-  Platform.OS !== 'android' || Constants.executionEnvironment === ExecutionEnvironment.StoreClient || Constants.expoConfig?.extra?.androidGoogleMapsKeySet === true;
+const MAP_AVAILABLE = HAS_MAPBOX_TOKEN;
 
-// Whole of India, used until the phone's location is known.
-const INDIA_REGION: Region = { latitude: 20.59, longitude: 78.96, latitudeDelta: 22, longitudeDelta: 22 };
-/** Map zoom (as a lat/lon span in degrees) that shows about a 5 km radius. */
-const AREA_DELTA = 0.09;
-const PLACE_DELTA = 0.012;
+/** Whole of India, used until the phone's location is known. */
+const INDIA_CAMERA = { lat: 20.59, lon: 78.96, zoom: 3.8 };
+/** Zoom that shows about a 5 km radius, and a single place. */
+const AREA_ZOOM = 12.3;
+const PLACE_ZOOM = 14.8;
 /** Distance the map must be dragged before "Search this area" appears, in km. */
 const SEARCH_AREA_THRESHOLD_KM = 1;
 const CAMERA_MS = 700;
@@ -129,7 +126,7 @@ export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { height: screenHeight } = useWindowDimensions();
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<MapboxMapHandle>(null);
   const cards = useCardStore((s) => s.cards);
   const liteMode = useCardStore((s) => s.liteMode === true);
 
@@ -158,6 +155,7 @@ export default function MapScreen() {
     isSearching,
     setIsSearching,
     clearSearch,
+    submitSearch,
     selectedPlaceId,
     setSelectedPlaceId,
     hasMapboxKey,
@@ -202,14 +200,14 @@ export default function MapScreen() {
   const sheetStyle = useAnimatedStyle(() => ({ height: sheetHeight.get() }));
 
   // ── Camera ─────────────────────────────────────────
-  const flyTo = useCallback((lat: number, lon: number, delta: number) => {
-    mapRef.current?.animateToRegion({ latitude: lat, longitude: lon, latitudeDelta: delta, longitudeDelta: delta }, CAMERA_MS);
+  const flyTo = useCallback((lat: number, lon: number, zoom: number) => {
+    mapRef.current?.flyTo(lat, lon, zoom, CAMERA_MS);
   }, []);
 
   // Centre the map once the first location (or a new search area) is known.
   const centerKey = activeLocation ? `${activeLocation.lat.toFixed(3)},${activeLocation.lon.toFixed(3)}` : null;
   useEffect(() => {
-    if (activeLocation) flyTo(activeLocation.lat, activeLocation.lon, AREA_DELTA);
+    if (activeLocation) flyTo(activeLocation.lat, activeLocation.lon, AREA_ZOOM);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [centerKey]);
 
@@ -219,7 +217,7 @@ export default function MapScreen() {
       setOpenPlace(place);
       setSelectedPlaceId(place.id);
       snapTo(showMap ? snaps.expanded : listHeight);
-      flyTo(place.center[1], place.center[0], PLACE_DELTA);
+      flyTo(place.center[1], place.center[0], PLACE_ZOOM);
     },
     [setSelectedPlaceId, snapTo, snaps.expanded, flyTo, showMap, listHeight],
   );
@@ -252,7 +250,35 @@ export default function MapScreen() {
     [clearSearch, activeCategory, openPlacePanel, userLocation, activeLocation, cards, setCustomCenter],
   );
 
-  const onRegionChangeComplete = useCallback((r: Region) => setMapCenter({ lat: r.latitude, lon: r.longitude }), []);
+  const onMoveEnd = useCallback((c: { lat: number; lon: number }) => setMapCenter(c), []);
+  const onMarkerPress = useCallback(
+    (id: string) => {
+      const place = places.find((p) => p.id === id);
+      if (place) openPlacePanel(place);
+    },
+    [places, openPlacePanel],
+  );
+  const dismissKeyboard = useCallback(() => Keyboard.dismiss(), []);
+
+  // What the map draws: the search radius, your location, and the places (selected one larger).
+  const mapState: MapState = useMemo(() => {
+    const markers: MapMarker[] = places.map((p) => ({
+      id: p.id,
+      lat: p.center[1],
+      lon: p.center[0],
+      emoji: CATEGORY_ICON[p.category] ?? '📍',
+      selected: p.id === selectedPlaceId,
+      label: p.name,
+    }));
+    if (openPlace && !places.some((p) => p.id === openPlace.id)) {
+      markers.push({ id: openPlace.id, lat: openPlace.center[1], lon: openPlace.center[0], emoji: CATEGORY_ICON[openPlace.category] ?? '📍', selected: true, label: openPlace.name });
+    }
+    return {
+      markers,
+      user: userLocation,
+      circle: activeLocation ? { lat: activeLocation.lat, lon: activeLocation.lon, radiusKm } : null,
+    };
+  }, [places, selectedPlaceId, openPlace, userLocation, activeLocation, radiusKm]);
   const movedAway =
     !!mapCenter && !!activeLocation && haversineDistance(mapCenter.lat, mapCenter.lon, activeLocation.lat, activeLocation.lon) > SEARCH_AREA_THRESHOLD_KM;
 
@@ -266,7 +292,7 @@ export default function MapScreen() {
       return;
     }
     backToMyLocation();
-    if (userLocation) flyTo(userLocation.lat, userLocation.lon, AREA_DELTA);
+    if (userLocation) flyTo(userLocation.lat, userLocation.lon, AREA_ZOOM);
   }, [permission, retryLocation, backToMyLocation, userLocation, flyTo]);
 
   const renderPlace = useCallback(
@@ -291,8 +317,6 @@ export default function MapScreen() {
     status = { title: 'Finding your location…', body: 'You can also search for an area or a shop above.' };
   } else if (placesState === 'error') {
     status = { title: 'Could not load places', body: placesError ?? '', action: { label: 'Retry', onPress: refreshPlaces } };
-  } else if (!MAP_AVAILABLE) {
-    status = { title: 'Map view not available', body: 'This build has no Google Maps key, so nearby places are shown as a list.' };
   }
 
   const listHeader = (
@@ -337,58 +361,18 @@ export default function MapScreen() {
     <View style={styles.container}>
       {/* MAP */}
       {showMap && (
-        <MapView
+        <MapboxMap
           ref={mapRef}
+          token={MAPBOX_TOKEN}
           style={StyleSheet.absoluteFill}
-          mapType={hasMapboxKey ? 'none' : 'standard'}
-          userInterfaceStyle="dark"
           // Opened from the list view, the map starts on the current area.
-          initialRegion={
-            activeLocation
-              ? { latitude: activeLocation.lat, longitude: activeLocation.lon, latitudeDelta: AREA_DELTA, longitudeDelta: AREA_DELTA }
-              : INDIA_REGION
-          }
-          showsCompass={false}
-          toolbarEnabled={false}
-          onRegionChangeComplete={onRegionChangeComplete}
-          onPress={() => Keyboard.dismiss()}
-        >
-          {hasMapboxKey && <UrlTile urlTemplate={MAPBOX_TILE_URL} maximumZ={19} flipY={false} tileSize={256} />}
-          {activeLocation && (
-            <Circle
-              center={{ latitude: activeLocation.lat, longitude: activeLocation.lon }}
-              radius={radiusKm * 1000}
-              strokeColor={theme.colors.goldBorder}
-              fillColor={theme.colors.goldSoft}
-            />
-          )}
-          {userLocation && (
-            <Marker coordinate={{ latitude: userLocation.lat, longitude: userLocation.lon }} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false} zIndex={999}>
-              <View style={styles.userDot} accessibilityLabel="Your location" />
-            </Marker>
-          )}
-          {places.map((p) => (
-            <Marker
-              key={p.id}
-              coordinate={{ latitude: p.center[1], longitude: p.center[0] }}
-              onPress={() => openPlacePanel(p)}
-              tracksViewChanges={false}
-              zIndex={p.id === selectedPlaceId ? 100 : 1}
-              accessibilityLabel={p.name}
-            >
-              <View style={[styles.marker, p.id === selectedPlaceId && styles.markerSelected]}>
-                <Text style={styles.markerText}>{CATEGORY_ICON[p.category] ?? '📍'}</Text>
-              </View>
-            </Marker>
-          ))}
-          {openPlace && !places.some((p) => p.id === openPlace.id) && (
-            <Marker coordinate={{ latitude: openPlace.center[1], longitude: openPlace.center[0] }} tracksViewChanges={false} zIndex={200}>
-              <View style={[styles.marker, styles.markerSelected]}>
-                <Text style={styles.markerText}>{CATEGORY_ICON[openPlace.category] ?? '📍'}</Text>
-              </View>
-            </Marker>
-          )}
-        </MapView>
+          initialCamera={activeLocation ? { lat: activeLocation.lat, lon: activeLocation.lon, zoom: AREA_ZOOM } : INDIA_CAMERA}
+          state={mapState}
+          controlsTop={insets.top + theme.sizes.touch + theme.spacing.lg}
+          onMoveEnd={onMoveEnd}
+          onMarkerPress={onMarkerPress}
+          onPress={dismissKeyboard}
+        />
       )}
 
       {/* SEARCH */}
@@ -401,6 +385,7 @@ export default function MapScreen() {
             placeholderTextColor={theme.colors.textMuted}
             keyboardAppearance="dark"
             returnKeyType="search"
+            onSubmitEditing={submitSearch}
             value={searchQuery}
             onChangeText={(t) => {
               setSearchQuery(t);

@@ -112,6 +112,11 @@ export default function SettingsScreen() {
         </View>
         <Icon name="chevron-right" color={theme.colors.textMuted} size={theme.sizes.icon} />
       </Pressable>
+
+      <Text style={[theme.text.caption, styles.section]}>{t.privacySection}</Text>
+      <View style={styles.group}>
+        <Text style={theme.text.body}>{t.privacy}</Text>
+      </View>
     </ScrollView>
   );
 }

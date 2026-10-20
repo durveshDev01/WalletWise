@@ -134,10 +134,8 @@ are protected by Vercel Authentication by default, so the app cannot call them.
    npx eas-cli@latest env:set --name EXPO_PUBLIC_AURA_API_URL --value https://<your-project>.vercel.app --environment preview --visibility plaintext
    npx eas-cli@latest env:set --name EXPO_PUBLIC_MAPBOX_TOKEN --value <your-mapbox-token> --environment preview --visibility sensitive
    ```
-   Optional, only if you have a Google Maps key:
-   ```bash
-   npx eas-cli@latest env:set --name GOOGLE_MAPS_ANDROID_API_KEY --value <key> --environment preview --visibility secret
-   ```
+   The Best Card map is Mapbox GL JS in a WebView, so no Google Maps key is needed.
+   Use a public Mapbox token (starts with `pk.`) with only the default public scopes.
 3. Build:
    ```bash
    npx eas-cli@latest build -p android --profile preview

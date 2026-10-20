@@ -108,8 +108,30 @@ describe('Mapbox service', () => {
       if (url.includes('/geocoding/v5/')) return { features: [{ id: 'locality.1', text: 'Karve Nagar', place_name: 'Karve Nagar, Pune', center: [73.82, 18.49], place_type: ['locality'] }] };
       return {};
     });
-    const list = await mapbox.searchPlaces('dmart karve nagar', CENTER);
+    const list = await mapbox.searchPlaces('dmart karve nagar', CENTER, { thorough: true });
     assert.equal(list[0].isPoi, true);
     assert.equal(list[1].isPoi, false);
+  });
+
+  it('typing searches use Geocoding only, so the small Search Box quota is kept for Search', async () => {
+    const urls: string[] = [];
+    mockFetch((url) => {
+      urls.push(url);
+      return { features: [] };
+    });
+    await mapbox.searchPlaces('phoenix mall', CENTER);
+    assert.ok(urls.length > 0);
+    assert.ok(urls.every((u) => !u.includes('/forward')));
+  });
+
+  it('repeats of the same search come from memory', async () => {
+    let calls = 0;
+    mockFetch(() => {
+      calls++;
+      return { features: [] };
+    });
+    await mapbox.searchPlaces('kothrud depot', CENTER);
+    await mapbox.searchPlaces('Kothrud Depot', CENTER);
+    assert.equal(calls, 1);
   });
 });

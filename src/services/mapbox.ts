@@ -10,6 +10,12 @@
  *    no result, since Mapbox's POI coverage varies by country.
  *
  * Docs: https://docs.mapbox.com/api/search/search-box/ and /api/search/geocoding/
+ *
+ * Free tier, per month (mapbox.com/pricing): Geocoding (temporary) 100,000 requests;
+ * Search Box /category and /reverse 25,000 requests; Search Box forward search only
+ * 500 sessions. So typing uses Geocoding, and Search Box forward runs only when the user
+ * presses Search. Results are kept in memory for a few minutes to avoid repeat calls;
+ * Mapbox allows search results for temporary use only, so nothing is saved to the phone.
  */
 import type { MerchantCategory } from '../utils/merchantClassifier';
 import { haversineDistance } from '../utils/geospatial';
@@ -17,9 +23,6 @@ import { haversineDistance } from '../utils/geospatial';
 export const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '';
 /** False when the .env file or the EXPO_PUBLIC_MAPBOX_TOKEN line is missing. */
 export const HAS_MAPBOX_TOKEN = MAPBOX_TOKEN.trim().length > 0;
-
-/** Dark map tiles in the app's style, at retina resolution. */
-export const MAPBOX_TILE_URL = `https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/256/{z}/{x}/{y}@2x?access_token=${MAPBOX_TOKEN}`;
 
 const SEARCH_BOX = 'https://api.mapbox.com/search/searchbox/v1';
 const LANGUAGE = 'en';
@@ -72,6 +75,20 @@ async function getJson(url: string): Promise<any> {
   }
   return res.json();
 }
+
+/** In-memory cache for this app session only (Mapbox results are for temporary use). */
+const CACHE_TTL_MS = 10 * 60 * 1000;
+const CACHE_MAX = 200;
+const cache = new Map<string, { at: number; value: unknown }>();
+async function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.value as T;
+  const value = await load();
+  if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value as string);
+  cache.set(key, { at: Date.now(), value });
+  return value;
+}
+const near = (c: LatLon | null) => (c ? `${c.lat.toFixed(3)},${c.lon.toFixed(3)}` : 'none');
 
 const qs = (params: Record<string, string | number | undefined>) =>
   Object.entries(params)
@@ -188,7 +205,11 @@ async function categoryIdsFor(filter: SpendFilter): Promise<string[]> {
  * Places of a spend type within `radiusKm` of `center`, nearest first.
  * Uses Search Box category search; falls back to Geocoding v5 if it returns nothing.
  */
-export async function nearbyPlaces(center: LatLon, filter: SpendFilter, radiusKm: number): Promise<MapPlace[]> {
+export function nearbyPlaces(center: LatLon, filter: SpendFilter, radiusKm: number): Promise<MapPlace[]> {
+  return cached(`nearby|${filter}|${radiusKm}|${near(center)}`, () => loadNearbyPlaces(center, filter, radiusKm));
+}
+
+async function loadNearbyPlaces(center: LatLon, filter: SpendFilter, radiusKm: number): Promise<MapPlace[]> {
   const bbox = bboxAround(center, radiusKm);
   const proximity = `${center.lon},${center.lat}`;
   let places: MapPlace[] = [];
@@ -262,16 +283,23 @@ function dedupeAndSort(places: MapPlace[], center: LatLon, radiusKm: number): Ma
 
 /**
  * Text search for shops, brands, areas and addresses near `center`
- * ("DMart Karve Nagar", "Phoenix Mall", "Kothrud"). Search Box forward search,
- * topped up with Geocoding v5 for areas and addresses.
+ * ("DMart Karve Nagar", "Phoenix Mall", "Kothrud"). While typing, Geocoding v5 only;
+ * with `thorough` (the user pressed Search), Search Box forward search is added for
+ * better shop coverage.
  */
-export async function searchPlaces(query: string, center: LatLon | null): Promise<MapPlace[]> {
+export function searchPlaces(query: string, center: LatLon | null, options: { thorough?: boolean } = {}): Promise<MapPlace[]> {
   const q = query.trim().slice(0, 256);
-  if (q.length < 2) return [];
+  if (q.length < 2) return Promise.resolve([]);
+  return cached(`search|${options.thorough ? 'full' : 'quick'}|${q.toLowerCase()}|${near(center)}`, () => loadSearch(q, center, !!options.thorough));
+}
+
+async function loadSearch(q: string, center: LatLon | null, thorough: boolean): Promise<MapPlace[]> {
   const proximity = center ? `${center.lon},${center.lat}` : undefined;
 
   const [primary, fallback] = await Promise.allSettled([
-    getJson(`${SEARCH_BOX}/forward?${qs({ q, proximity, limit: SEARCH_LIMIT, language: LANGUAGE, country: COUNTRY, auto_complete: 'true', access_token: MAPBOX_TOKEN })}`),
+    thorough
+      ? getJson(`${SEARCH_BOX}/forward?${qs({ q, proximity, limit: SEARCH_LIMIT, language: LANGUAGE, country: COUNTRY, auto_complete: 'true', access_token: MAPBOX_TOKEN })}`)
+      : Promise.resolve({ features: [] }),
     getJson(
       `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?${qs({
         proximity,
@@ -284,8 +312,10 @@ export async function searchPlaces(query: string, center: LatLon | null): Promis
     ),
   ]);
 
-  if (primary.status === 'rejected' && fallback.status === 'rejected') {
-    throw primary.reason instanceof MapboxError ? primary.reason : new MapboxError('Search failed');
+  // Fail only when every request that actually ran failed.
+  if (fallback.status === 'rejected' && (primary.status === 'rejected' || !thorough)) {
+    const reason = primary.status === 'rejected' ? primary.reason : fallback.reason;
+    throw reason instanceof MapboxError ? reason : new MapboxError('Search failed');
   }
   const results: MapPlace[] = [];
   if (primary.status === 'fulfilled') results.push(...((primary.value.features ?? []).map(fromSearchBox).filter(Boolean) as MapPlace[]));
@@ -301,7 +331,11 @@ export async function searchPlaces(query: string, center: LatLon | null): Promis
 }
 
 /** Area name for a point, for example "Kothrud, Pune". Null if unknown. */
-export async function areaName(center: LatLon): Promise<string | null> {
+export function areaName(center: LatLon): Promise<string | null> {
+  return cached(`area|${near(center)}`, () => loadAreaName(center));
+}
+
+async function loadAreaName(center: LatLon): Promise<string | null> {
   try {
     const d = await getJson(
       `https://api.mapbox.com/search/geocode/v6/reverse?${qs({

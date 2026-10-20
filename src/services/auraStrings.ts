@@ -99,6 +99,8 @@ type SettingsStrings = {
   profileSection: string;
   profile: string;
   profileHint: string;
+  privacySection: string;
+  privacy: string;
 };
 
 export const SETTINGS_STRINGS: Record<AppLanguage, SettingsStrings> = {
@@ -117,6 +119,9 @@ export const SETTINGS_STRINGS: Record<AppLanguage, SettingsStrings> = {
     profileSection: 'SPENDING',
     profile: 'Spending profile',
     profileHint: 'Your monthly spends, used by Find My Card and Aura.',
+    privacySection: 'YOUR DATA',
+    privacy:
+      'Your cards, points, spends and goals stay on this phone. There is no account. When you ask Aura, your question goes to the WalletWise server with your card list, points and spending profile (never card numbers or your name), and the answer is written by the Groq AI service. Map search sends the place you type to Mapbox.',
   },
   hi: {
     title: 'सेटिंग्स',
@@ -133,5 +138,8 @@ export const SETTINGS_STRINGS: Record<AppLanguage, SettingsStrings> = {
     profileSection: 'खर्च',
     profile: 'खर्च की जानकारी',
     profileHint: 'आपके महीने के खर्च, जो Find My Card और Aura इस्तेमाल करते हैं।',
+    privacySection: 'आपका डेटा',
+    privacy:
+      'आपके कार्ड, पॉइंट्स, खर्च और लक्ष्य इसी फ़ोन पर रहते हैं। कोई अकाउंट नहीं है। Aura से पूछने पर आपका सवाल, आपके कार्ड की सूची, पॉइंट्स और खर्च की जानकारी के साथ WalletWise सर्वर पर जाता है (कार्ड नंबर या आपका नाम कभी नहीं), और जवाब Groq AI सेवा लिखती है। मैप पर खोजी गई जगह Mapbox को भेजी जाती है।',
   },
 };

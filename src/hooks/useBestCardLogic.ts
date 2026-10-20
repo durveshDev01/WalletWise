@@ -38,7 +38,9 @@ export type RadiusKm = (typeof RADIUS_OPTIONS)[number];
 const MOVE_THRESHOLD_KM = 0.15;
 /** Last known position younger than this is good enough to start with. */
 const LAST_KNOWN_MAX_AGE_MS = 10 * 60 * 1000;
-const SEARCH_DEBOUNCE_MS = 350;
+/** Pause in typing before a search, and the shortest query searched while typing. */
+const SEARCH_DEBOUNCE_MS = 450;
+const SEARCH_MIN_CHARS = 3;
 
 /** Turns a Mapbox place into a place with a spend type, distance and the best wallet card. */
 export function enrichPlace(p: MapPlace, fallback: MerchantCategory, from: LatLon | null, cards: CardData[]): EnrichedPlace {
@@ -178,7 +180,7 @@ export function useBestCardLogic() {
   useEffect(() => {
     const q = searchQuery.trim();
     const request = ++latestSearch.current;
-    if (q.length < 2) return;
+    if (q.length < SEARCH_MIN_CHARS) return;
     const timer = setTimeout(() => {
       setSearchState('loading');
       setSearchError(null);
@@ -199,6 +201,27 @@ export function useBestCardLogic() {
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery]);
+
+  // Pressing Search runs the fuller search (Search Box shops as well as Geocoding).
+  const submitSearch = useCallback(() => {
+    const q = searchQuery.trim();
+    if (q.length < 2) return;
+    const request = ++latestSearch.current;
+    setSearchState('loading');
+    setSearchError(null);
+    searchPlaces(q, activeLocation ?? userLocation, { thorough: true }).then(
+      (list) => {
+        if (request !== latestSearch.current) return;
+        setSearchResults(list);
+        setSearchState('ready');
+      },
+      (e) => {
+        if (request !== latestSearch.current) return;
+        setSearchState('error');
+        setSearchError(errorText(e));
+      },
+    );
+  }, [searchQuery, activeLocation, userLocation]);
 
   const clearSearch = useCallback(() => {
     setSearchQuery('');
@@ -237,6 +260,7 @@ export function useBestCardLogic() {
     isSearching,
     setIsSearching,
     clearSearch,
+    submitSearch,
     // selection
     selectedPlaceId,
     setSelectedPlaceId,
