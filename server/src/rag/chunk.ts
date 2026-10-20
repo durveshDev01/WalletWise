@@ -52,12 +52,17 @@ export function chunkMarkdown(body: string, meta: DocMeta): Chunk[] {
   });
   if (intro) named.unshift({ title: 'Overview', text: intro.replace(/^# .*\r?\n?/, '').trim() });
 
+  // General guides all share cardId "general", so their name keeps section ids apart
+  // (two guides can both have a "Closing a card" section).
+  const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const prefix = meta.cardId === 'general' ? `general-${slug(meta.cardName)}` : meta.cardId;
+
   const chunks: Chunk[] = [];
   for (const section of named) {
     if (!section.text) continue;
     splitLong(section.text).forEach((piece, i) => {
       chunks.push({
-        id: `${meta.cardId}::${section.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}::${i}`,
+        id: `${prefix}::${slug(section.title)}::${i}`,
         // The card and section name are part of the text so the embedding knows the context.
         text: `${meta.cardName} (${meta.bank}) — ${section.title}\n${piece}`,
         section: section.title,

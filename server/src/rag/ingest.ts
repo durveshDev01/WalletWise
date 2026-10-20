@@ -111,7 +111,13 @@ async function main() {
     await upsertChunks(records);
     console.log(`Stored ${chunks.length} chunks in Chroma in ${Math.round((Date.now() - started) / 1000)} s.`);
   } catch (error) {
-    console.warn(`Chroma is not reachable (${error instanceof Error ? error.message.split('.')[0] : error}). Aura will use the backup index file. Start Chroma with: npm run aura:chroma, then run ingest again.`);
+    const message = error instanceof Error ? error.message.split('.')[0] : String(error);
+    if (/ECONNREFUSED|fetch failed|connect/i.test(message)) {
+      console.warn(`Chroma is not reachable (${message}). Aura will use the backup index file. Start Chroma with: npm run aura:chroma, then run ingest again.`);
+    } else {
+      console.error(`Chroma did not accept the chunks (${message}). Fix the problem and run ingest again; until then Chroma search may be empty.`);
+      process.exitCode = 1;
+    }
   }
 }
 

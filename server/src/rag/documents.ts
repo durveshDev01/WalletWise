@@ -38,5 +38,12 @@ export function collectChunks(): Chunk[] {
     const { meta, markdown } = cardDocument(card);
     chunks.push(...chunkMarkdown(markdown, meta));
   }
+  // Chroma rejects a batch with a repeated id, so any leftover clash gets a numbered suffix.
+  const seen = new Map<string, number>();
+  for (const c of chunks) {
+    const n = seen.get(c.id) ?? 0;
+    seen.set(c.id, n + 1);
+    if (n > 0) c.id = `${c.id}~${n}`;
+  }
   return chunks;
 }
