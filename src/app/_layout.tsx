@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 import * as Device from 'expo-device';
 import { Stack } from 'expo-router';
@@ -43,12 +43,17 @@ function useLiteSuggestion(ready: boolean) {
 
 export default function RootLayout() {
   const hydrated = useStoreHydrated();
-  const introSeen = useCardStore((s) => s.introSeen === true);
   const liteMode = useCardStore((s) => s.liteMode === true);
   const setIntroSeen = useCardStore((s) => s.setIntroSeen);
+  // Not saved, so the intro plays again every time the app is opened.
+  const [introDone, setIntroDone] = useState(false);
+  const finishIntro = useCallback(() => {
+    setIntroDone(true);
+    setIntroSeen();
+  }, [setIntroSeen]);
 
-  // The intro plays once, on first launch, and never in lite mode.
-  const showIntro = hydrated && !introSeen && !liteMode;
+  // The intro plays on every launch, but never in lite mode.
+  const showIntro = hydrated && !introDone && !liteMode;
 
   useEffect(() => {
     if (hydrated && !showIntro) SplashScreen.hideAsync();
@@ -77,7 +82,7 @@ export default function RootLayout() {
       </Stack>
       {showIntro && (
         <View style={StyleSheet.absoluteFill}>
-          <WalletWiseIntro onFinish={setIntroSeen} />
+          <WalletWiseIntro onFinish={finishIntro} />
         </View>
       )}
     </GestureHandlerRootView>

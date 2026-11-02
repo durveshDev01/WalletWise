@@ -14,14 +14,20 @@ export function WalletWiseIntro({ onFinish }: WalletWiseIntroProps) {
   });
 
   useEffect(() => {
+    // The splash (logo) normally hides on the video's first frame; if that frame is slow,
+    // hide it anyway so the logo never sits over the playing intro.
+    const splashFallback = setTimeout(() => SplashScreen.hideAsync(), 3000);
     // If the video hangs or errors, this will ensure the app still opens
-    let safetyTimeout = setTimeout(() => {
+    const safetyTimeout = setTimeout(() => {
       console.log('Intro safety timeout triggered (15s fallback)');
       SplashScreen.hideAsync();
       onFinish();
     }, 15000);
 
-    return () => clearTimeout(safetyTimeout);
+    return () => {
+      clearTimeout(splashFallback);
+      clearTimeout(safetyTimeout);
+    };
   }, [onFinish]);
 
   useEventListener(player, 'statusChange', (payload) => {
@@ -32,18 +38,8 @@ export function WalletWiseIntro({ onFinish }: WalletWiseIntroProps) {
     }
   });
 
-  // Ensure the splash screen only hides when the very first frame of the video paints
-  useEventListener(player, 'timeUpdate', (payload) => {
-    if (payload.currentTime > 0.05) {
-      SplashScreen.hideAsync();
-    }
-  });
-
-  useEventListener(player, 'playingChange', ({ isPlaying }) => {
-    if (!isPlaying && player.currentTime > 0.5) {
-      console.log('Video finished cleanly (playingChange)');
-      onFinish();
-    }
+  useEventListener(player, 'playToEnd', () => {
+    onFinish();
   });
 
   return (
@@ -53,6 +49,8 @@ export function WalletWiseIntro({ onFinish }: WalletWiseIntroProps) {
         style={StyleSheet.absoluteFill}
         nativeControls={false}
         contentFit="cover"
+        // Hide the splash only once the video is actually on screen.
+        onFirstFrameRender={() => SplashScreen.hideAsync()}
       />
       <Pressable
         onPress={() => {

@@ -53,6 +53,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "21c0f29f-1228-4051-9dde-5d240bb766a2"
+      }
+    },
+    "owner": "sanchit-borikar"
   }
 }
