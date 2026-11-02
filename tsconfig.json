@@ -21,6 +21,14 @@
     "node_modules",
     "server",
     "android",
-    "ios"
+    "ios",
+    // Unintegrated ledger-import/forecast experiments stay out until their store APIs exist.
+    "tests",
+    "src/components/ForecastOutcomeEvaluationPanel.tsx",
+    "src/components/StatementCsvImport.tsx",
+    "src/engine/forecasting/forecastEvaluation.ts",
+    "src/engine/ledgerCsvImport.ts",
+    "src/engine/statementPickerDiagnostics.ts",
+    "src/store/useForecastEvaluationStore.ts"
   ]
 }
