@@ -41,11 +41,11 @@ function ExpiryBanner({ cards }: { cards: CardData[] }) {
   return (
     <View style={[styles.infoCard, { borderColor: 'rgba(201, 65, 46, 0.3)' }]}>
       <View style={styles.expiryBody}>
-        <Text style={[styles.infoLabel, { color: colors.accent.danger }]}>POINTS EXPIRING SOON</Text>
+        <Text style={[styles.infoLabel, { color: colors.accent.danger }]}>{expiringCard.currencyName.toUpperCase()} EXPIRING SOON</Text>
         <View style={styles.expiryStats}>
           <View style={styles.expiryStat}>
             <Text style={styles.infoBigNum}>{expiringCard.points.toLocaleString('en-IN')}</Text>
-            <Text style={styles.infoUnit}>pts</Text>
+            <Text style={styles.infoUnit}>{expiringCard.currencyName}</Text>
           </View>
           <View style={styles.expiryDivider} />
           <View style={styles.expiryStat}>
@@ -68,28 +68,22 @@ function ExpiryBanner({ cards }: { cards: CardData[] }) {
 // ─────────────────────────────────────────────
 // Points Value Card (Black + Gold Theme)
 // ─────────────────────────────────────────────
-// Typical one-way domestic economy fare used to make the points value concrete.
-const TYPICAL_DOMESTIC_FARE = 5000;
-
 function PointsValueCard({ totalMin, totalMax }: { totalMin: number; totalMax: number }) {
   const router = useRouter();
-  const flights = Math.floor(totalMin / TYPICAL_DOMESTIC_FARE);
   return (
     <View style={styles.infoCard}>
-      <Text style={styles.infoLabel}>WHAT CAN YOUR POINTS GET YOU?</Text>
+      <Text style={styles.infoLabel}>WHAT ARE YOUR REWARDS WORTH?</Text>
       <Text style={[styles.infoBigNum, { marginTop: 8, color: colors.accent.goldStart }]}>
         ₹{totalMin.toLocaleString('en-IN')}{totalMax > totalMin ? ` – ₹${totalMax.toLocaleString('en-IN')}` : ''}
       </Text>
-      <Text style={styles.infoSubtext}>Guaranteed value to best realistic value</Text>
+      <Text style={styles.infoSubtext}>Estimated INR equivalent across separate reward programmes; balances are not pooled.</Text>
       <View style={styles.horizontalDivider} />
       <Pressable style={styles.infoRow} onPress={() => router.push('/trip-planner')}>
         <Text style={styles.infoIcon}>✈︎</Text>
         <View style={{ flex: 1 }}>
           <Text style={styles.infoRowTitle}>Travel</Text>
           <Text style={styles.infoRowSub}>
-            {flights > 0
-              ? `About ${flights} one-way domestic flight${flights > 1 ? 's' : ''} at ~₹5,000 each. Plan a trip →`
-              : 'Not enough for a flight yet. See how close you are →'}
+            {'Compare eligible airline transfer routes and check award prices, taxes and fees with the airline. Plan a trip →'}
           </Text>
         </View>
       </Pressable>
@@ -370,7 +364,7 @@ export default function WalletScreen() {
         </Animated.View>
 
         {/* Rest of the Info (Below hint) */}
-        <Text style={styles.sectionTitle}>Your points</Text>
+        <Text style={styles.sectionTitle}>Your reward balances</Text>
         <ExpiryBanner cards={cards} />
         <PointsValueCard totalMin={totalMin} totalMax={totalMax} />
         <WalletMoneyLinks />

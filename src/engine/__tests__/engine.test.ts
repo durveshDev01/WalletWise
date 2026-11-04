@@ -320,20 +320,20 @@ describe('real data', () => {
     assert.equal(r.rewardUnit, 'POINTS');
   });
 
-  it('covers a fare with points from several cards and reports the shortfall', () => {
+  it('keeps flight reward currencies separate and excludes cashback cards', () => {
     const plan = planTripPayment(
       cat,
       [
         { card: get('hdfc-infinia'), points: 5000 },
-        { card: get('sbi-cashback'), points: 0 },
+        { card: get('sbi-cashback'), points: 100000 },
       ],
       8000,
       { experience: 'NEW', monthlyRewardRs: 1000, today: TODAY },
     );
-    assert.equal(plan.pointsMix[0].cardId, 'hdfc-infinia');
-    assert.equal(plan.coveredRs, 5000);
-    assert.equal(plan.shortfallRs, 3000);
-    assert.equal(plan.monthsToCover, 3);
+    assert.ok(plan.pointsOptions.length > 0);
+    assert.ok(plan.pointsOptions.every((option) => option.cardId === 'hdfc-infinia'));
+    assert.ok(plan.pointsOptions.every((option) => option.estimated));
+    assert.ok(plan.notes.some((note) => note.includes('not live award prices')));
     assert.ok(plan.payCash);
   });
 

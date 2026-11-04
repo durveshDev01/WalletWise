@@ -95,11 +95,14 @@ describe('offline Aura: answers', () => {
     assert.ok(a.text.includes(inr(low)), a.text);
   });
 
-  it('totals points value from the engine', () => {
+  it('summarizes INR equivalents without adding unrelated point balances', () => {
     const a = answerOffline('What are my points worth?', ctx())!;
     const values = HOLDINGS.filter((h) => h.points > 0).map((h) => pointsValue(catalog, catalog.byId.get(h.catalogId)!, h.points));
     assert.ok(a.text.includes(inr(values.reduce((s, v) => s + v.low, 0))), a.text);
-    assert.ok(a.text.includes('28,200 points'), a.text);
+    assert.ok(a.text.includes('not interchangeable or pooled'), a.text);
+    assert.doesNotMatch(a.text, /28,200 points/);
+    assert.ok(a.text.includes('24,000 points'), a.text);
+    assert.ok(a.text.includes('4,200 points'), a.text);
   });
 
   it('lists upcoming card changes from walletAlerts', () => {

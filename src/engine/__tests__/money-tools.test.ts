@@ -255,6 +255,12 @@ describe('goalProgress', () => {
     assert.equal(goalProgress(cat, 1000, [{ cardId: 'base1', points: 5000 }]).monthsToGoal, 0);
     assert.equal(goalProgress(cat, 9000, [{ cardId: 'base1', points: 5000 }]).monthsToGoal, null);
   });
+
+  it('does not combine unrelated card balances to claim a single goal is reached', () => {
+    const r = goalProgress(cat, 10000, [{ cardId: 'base1', points: 5000 }, { cardId: 'online5', points: 5000 }]);
+    assert.equal(r.safeRs, 5000);
+    assert.equal(r.progress, 0.5);
+  });
 });
 
 describe('checkRedemption', () => {
@@ -265,6 +271,14 @@ describe('checkRedemption', () => {
     assert.equal(checkRedemption(cat, base1, 1000, 1000).band, 'FAIR');
     assert.equal(checkRedemption(cat, base1, 1000, 1200).band, 'GOOD');
     assert.equal(checkRedemption(cat, base1, 0, 1200).band, 'UNKNOWN');
+  });
+
+  it('subtracts redemption costs before computing net rupees per point', () => {
+    const result = checkRedemption(cat, base1, 1000, 1000, 200);
+    assert.equal(result.grossCashValueRs, 1000);
+    assert.equal(result.costsRs, 200);
+    assert.equal(result.netValueRs, 800);
+    assert.equal(result.rupeesPerPoint, 0.8);
   });
 
   it('uses transfer values on a real points card', () => {

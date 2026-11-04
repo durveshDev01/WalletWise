@@ -15,6 +15,7 @@ export {
 } from './portfolio';
 export {
   redemptionRoutes,
+  calculateRedemptionValue,
   safeRupeesPerPoint,
   bestRupeesPerPoint,
   pointsValue,
@@ -25,7 +26,7 @@ export { PARTNER_VALUES, partnerValue } from './partnerValues';
 export { planTripPayment, skyscannerUrl } from './trip';
 export type { TripPlan, PointsUse, TripHolding } from './trip';
 export type { PortfolioAdvice, CardPick, WalletValue, CategoryAllocation } from './portfolio';
-export type { RedemptionRoute, RedemptionPlan, PointsValue } from './redemption';
+export type { RedemptionRoute, RedemptionPlan, PointsValue, RedemptionQuote, RedemptionValue } from './redemption';
 export { upiRule } from './portfolio';
 export type { UpiRule } from './portfolio';
 export { recommendFirstCard, FIRST_CARD_MAX_FEE, FIRST_CARD_MAX_JOINING_FEE, FIRST_CARD_MAX_STATED_INCOME } from './firstCard';

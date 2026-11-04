@@ -5,27 +5,27 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { theme } from '../../theme';
 
 type Props = {
-  /** Guaranteed value of all points (default redemption route), in rupees. */
+  /** Default-route INR equivalent, summed across separate programmes. */
   totalMin: number;
   /** Value with the best realistic redemptions, in rupees. */
   totalMax: number;
   cardCount: number;
-  totalPoints: number;
+  balanceCount: number;
   isDemo: boolean;
   onSeeHow: () => void;
 };
 
 const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
 
-/** What all the user's points are worth: the first thing they see on Home. */
-export function HeroCard({ totalMin, totalMax, cardCount, totalPoints, isDemo, onSeeHow }: Props) {
-  const summary = `${cardCount} ${cardCount === 1 ? 'card' : 'cards'} • ${totalPoints.toLocaleString('en-IN')} reward points`;
+/** Estimated INR equivalent of the user's separate reward balances. */
+export function HeroCard({ totalMin, totalMax, cardCount, balanceCount, isDemo, onSeeHow }: Props) {
+  const summary = `${cardCount} ${cardCount === 1 ? 'card' : 'cards'} • ${balanceCount} separate reward balances`;
   return (
     // A plain container (not a button) so the "See how" link stays reachable by screen readers.
     <View style={styles.card}>
       <LinearGradient colors={theme.colors.heroGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
       <View style={styles.labelRow}>
-        <Text style={theme.text.caption}>YOUR POINTS ARE WORTH</Text>
+      <Text style={theme.text.caption}>ESTIMATED REWARD VALUE</Text>
         {isDemo && (
           <View style={styles.demoChip}>
             <Text style={[theme.text.caption, styles.demoText]}>Sample cards</Text>
@@ -36,14 +36,14 @@ export function HeroCard({ totalMin, totalMax, cardCount, totalPoints, isDemo, o
         style={[theme.text.title, styles.value]}
         adjustsFontSizeToFit
         numberOfLines={1}
-        accessibilityLabel={`Your points are worth ${inr(totalMin)}`}
+        accessibilityLabel={`Estimated INR value of separate reward balances is ${inr(totalMin)}`}
       >
         {inr(totalMin)}
       </Text>
 
       {totalMax > totalMin ? (
         <View style={styles.bestRow}>
-          <Text style={[theme.text.body, styles.best]}>Up to {inr(totalMax)} with best redemptions</Text>
+        <Text style={[theme.text.body, styles.best]}>Up to {inr(totalMax)} estimated across separate programmes</Text>
           <Pressable
             onPress={onSeeHow}
             accessibilityRole="link"
@@ -55,7 +55,7 @@ export function HeroCard({ totalMin, totalMax, cardCount, totalPoints, isDemo, o
           </Pressable>
         </View>
       ) : (
-        <Text style={theme.text.body}>At the default redemption value</Text>
+        <Text style={theme.text.body}>Estimated default-route equivalent; programmes stay separate</Text>
       )}
 
       <View style={styles.divider} />

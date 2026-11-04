@@ -41,7 +41,7 @@ function getEarnContent(card: CardData) {
   return {
     rateLabel: 'BASE RETURN',
     rateValue: base ? `${base.ratePct}%` : card.rewardHeadline,
-    rateDetail: base ? 'Value back on everyday spends at the typical redemption value' : '',
+    rateDetail: base ? 'Estimated return on everyday spends at the default redemption value' : '',
     categories: card.rewardCategories.length > 0 ? card.rewardCategories : ['Everyday spends'],
     highlights: accelerated.slice(0, 4).map((r) => ({
       icon: CATEGORY_ICONS[r.category] ?? '★',
@@ -59,11 +59,11 @@ function getTransferContent(card: CardData) {
   return {
     forex: card.forexMarkup,
     partners: routes.slice(0, 8).map(
-      (r) => `${r.label.replace('Transfer to ', '')}: about ₹${r.rupeesPerPoint.toFixed(2)} per point${r.confidence === 'LOW' ? ' (estimate)' : ''}`,
+      (r) => `${r.label.replace('Transfer to ', '')}: estimated ₹${r.rupeesPerPoint.toFixed(2)} per source point (${r.confidence.toLowerCase()} confidence). Rule: ${r.ruleSource ?? 'source unavailable'}${r.ruleVerifiedAt ? `, checked ${r.ruleVerifiedAt}` : ', date unavailable'}. Valuation: ${r.valuationSource}${r.valuationVerifiedAt ? `, dated ${r.valuationVerifiedAt}` : ', no verification date'}.`,
     ),
     ratio:
       routes.length > 0
-        ? `${routes.length} transfer partners. Values are WalletWise estimates; confirm ratios with the bank before transferring.`
+        ? `${routes.length} transfer routes. Values are estimates, not guaranteed cash. Confirm the current ratio and fees with the issuer and redemption programme before transferring.`
         : 'No airline or hotel transfer partners. Use the default redemption route.',
   };
 }
@@ -170,7 +170,7 @@ function RedeemTab({ card }: { card: CardData }) {
     <Animated.View entering={enter(FadeInDown.duration(350).springify())}>
       {plan && (
         <View style={[s.infoCard, { marginBottom: 16 }]}>
-          <Text style={s.infoCardLabel}>BEST WAY TO USE {card.points.toLocaleString('en-IN')} POINTS</Text>
+          <Text style={s.infoCardLabel}>BEST WAY TO USE {card.points.toLocaleString('en-IN')} {card.currencyName.toUpperCase()}</Text>
           <Text style={[s.infoCardBigValue, { fontSize: 22 }]}>{plan.recommended.label}</Text>
           <Text style={[s.infoCardDesc, { marginTop: 6 }]}>About ₹{plan.valueRs.toLocaleString('en-IN')}. {plan.reason}</Text>
           {plan.alternatives.map((r) => (
@@ -195,7 +195,8 @@ function RedeemTab({ card }: { card: CardData }) {
         <Text style={[s.infoCardBigValue, { color: '#F5D06F' }]}>
           ₹{card.highValue.toLocaleString('en-IN')}
         </Text>
-        <Text style={s.infoCardDesc}>Best estimated redemption value</Text>
+        <Text style={s.infoCardDesc}>Estimated via {card.valueRoute} · {card.valueConfidence.toLowerCase()} confidence</Text>
+        <Text style={s.infoCardDesc}>{card.valueSource}{card.valueVerifiedAt ? ` · valued ${card.valueVerifiedAt}` : ' · valuation has no verification date'}</Text>
       </View>
 
       <View style={[s.infoCard, { marginTop: 16 }]}>
@@ -208,11 +209,12 @@ function RedeemTab({ card }: { card: CardData }) {
         </View>
         <View style={s.feeDivider} />
         <View style={s.feeRow}>
-          <Text style={s.feeLabel}>Annual Potential</Text>
+          <Text style={s.feeLabel}>Annual net estimate (typical spend)</Text>
           <Text style={[s.feeValue, { color: '#F5D06F' }]}>
             ≈ ₹{card.intelligence.potentialAnnualValue.toLocaleString('en-IN')}
           </Text>
         </View>
+        <Text style={s.infoCardDesc}>Illustration based on WalletWise&apos;s typical monthly spend profile; your actual return depends on your spend and current issuer terms.</Text>
       </View>
       <RedemptionCheckBlock catalogId={card.catalogId} />
     </Animated.View>
@@ -386,7 +388,7 @@ export default function CardDetailScreen() {
             <Text style={s.statsLabel}>AVAILABLE {card.currencyName.toUpperCase()}</Text>
             {editing ? (
               <View style={{ gap: 10, marginVertical: 8 }}>
-                <TextInput value={pointsText} onChangeText={setPointsText} keyboardType="number-pad" style={s.editInput} placeholder="Points balance" placeholderTextColor="#555" keyboardAppearance="dark" />
+                <TextInput value={pointsText} onChangeText={setPointsText} keyboardType="number-pad" style={s.editInput} placeholder={`${card.currencyName} balance`} placeholderTextColor="#555" keyboardAppearance="dark" />
                 <TextInput value={lastFourText} onChangeText={setLastFourText} keyboardType="number-pad" maxLength={4} style={s.editInput} placeholder="Last 4 digits" placeholderTextColor="#555" keyboardAppearance="dark" />
                 <TextInput value={statementDayText} onChangeText={setStatementDayText} keyboardType="number-pad" maxLength={2} style={s.editInput} placeholder="Statement day (1–31, optional)" placeholderTextColor="#555" keyboardAppearance="dark" />
                 <TextInput value={dueDayText} onChangeText={setDueDayText} keyboardType="number-pad" maxLength={2} style={s.editInput} placeholder="Due day (1–31, for reminders)" placeholderTextColor="#555" keyboardAppearance="dark" />

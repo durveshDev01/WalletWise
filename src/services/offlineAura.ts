@@ -281,7 +281,6 @@ function pointsAnswer(cards: { card: Card; points: number }[], ctx: OfflineConte
     return `${header(lang, simple)}\n${none}`;
   }
 
-  const totalPoints = withPoints.reduce((a, c) => a + c.points, 0);
   const low = withPoints.reduce((a, c) => a + c.value.low, 0);
   const high = withPoints.reduce((a, c) => a + c.value.high, 0);
   const top = withPoints[0];
@@ -289,8 +288,8 @@ function pointsAnswer(cards: { card: Card; points: number }[], ctx: OfflineConte
   if (simple) {
     const line =
       lang === 'hi'
-        ? `आपके पॉइंट्स की कीमत लगभग ${inr(low)} है। सबसे पहले ${top.card.name} के पॉइंट्स इस्तेमाल करें।`
-        : `Your points are worth about ${inr(low)}. Start with your ${top.card.name} points.`;
+        ? `अलग-अलग रिवॉर्ड प्रोग्राम के आपके बैलेंस की अनुमानित रुपये में कीमत लगभग ${inr(low)} है; इन्हें एक ही रिडेम्पशन में नहीं जोड़ा गया है। सबसे पहले ${top.card.name} का विकल्प देखें।`
+        : `Your separate reward balances have an estimated INR equivalent of about ${inr(low)}; they are not pooled into one redemption. Check the ${top.card.name} option first.`;
     return `${header(lang, simple)} ${line}`;
   }
 
@@ -298,15 +297,16 @@ function pointsAnswer(cards: { card: Card; points: number }[], ctx: OfflineConte
   const lines: string[] = [header(lang, simple)];
   lines.push(
     lang === 'hi'
-      ? `आपके ${groupIndian(totalPoints)} पॉइंट्स की कीमत लगभग ${range} है।`
-      : `Your ${groupIndian(totalPoints)} points are worth about ${range}.`,
+      ? `अलग-अलग रिवॉर्ड प्रोग्राम के बैलेंस की अनुमानित रुपये में कीमत ${range} है; इन्हें जोड़ा नहीं जा सकता।`
+      : `Separate reward-program balances have an estimated INR equivalent of ${range}; the underlying points are not interchangeable or pooled.`,
   );
   for (const c of withPoints.slice(0, 5)) {
-    const best = c.value.high > c.value.low ? ` ${lang === 'hi' ? 'से' : 'to'} ${inr(c.value.high)} (${c.value.bestRoute.label})` : '';
+    const best = c.value.high > c.value.low ? ` ${lang === 'hi' ? 'से' : 'to'} ${inr(c.value.high)} (${c.value.bestRoute.label}; ${c.value.bestRoute.confidence.toLowerCase()} confidence)` : '';
+    const provenance = c.value.bestRoute.valuationSource + (c.value.bestRoute.valuationVerifiedAt ? `; verified ${c.value.bestRoute.valuationVerifiedAt}` : '; no valuation verification date');
     lines.push(
       lang === 'hi'
-        ? `- ${c.card.name}: ${groupIndian(c.points)} पॉइंट्स, ${inr(c.value.low)}${best}`
-        : `- ${c.card.name}: ${groupIndian(c.points)} points, ${inr(c.value.low)}${best}`,
+        ? `- ${c.card.name}: ${groupIndian(c.points)} पॉइंट्स, ${inr(c.value.low)}${best}. स्रोत: ${provenance}`
+        : `- ${c.card.name}: ${groupIndian(c.points)} points, ${inr(c.value.low)}${best}. Source: ${provenance}`,
     );
   }
   lines.push(
