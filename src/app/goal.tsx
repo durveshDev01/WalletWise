@@ -13,7 +13,8 @@ const IDEAS = ['Trip', 'New phone', 'Diwali gifts', 'Bill credit', 'Wedding gift
 
 /**
  * Points goals: a rupee target paid for with the points on chosen cards. Progress uses
- * each card's default (safe) route; months to go use normal spending, never extra spend.
+ * each card's default route separately (no pooling); months to go use the strongest
+ * single-card estimate from normal spending, never extra spend.
  */
 export default function GoalScreen() {
   const goals = useCardStore((s) => s.goals) ?? [];
@@ -65,8 +66,8 @@ export default function GoalScreen() {
               <View style={[styles.fill, { width: `${Math.max(2, pct)}%` }]} />
             </View>
             <StatRow label="Target" value={inr(p.targetRs)} />
-            <StatRow label="Your points are worth" value={inr(p.safeRs)} tone="gold" />
-            {p.bestRs > p.safeRs && <StatRow label="With the best redemptions" value={`up to ${inr(p.bestRs)}`} />}
+            <StatRow label="Best one-card default-route value" value={inr(p.safeRs)} tone="gold" />
+            {p.bestRs > p.safeRs && <StatRow label="Best one-card estimated route" value={`up to ${inr(p.bestRs)}`} />}
             <StatRow label="Still needed" value={p.shortfallRs === 0 ? 'Reached!' : inr(p.shortfallRs)} tone={p.shortfallRs === 0 ? 'good' : undefined} />
             {p.shortfallRs > 0 && (
               <StatRow
@@ -75,6 +76,11 @@ export default function GoalScreen() {
               />
             )}
             <Body style={styles.small}>Counting: {cardNames}</Body>
+            {p.perCard.map((cardValue) => (
+              <Body key={cardValue.cardId} style={styles.small}>
+                {catalog.byId.get(cardValue.cardId)?.name ?? cardValue.cardId}: {inr(cardValue.safeRs)} via {cardValue.defaultRoute} ({cardValue.confidence.toLowerCase()} confidence{cardValue.verifiedAt ? `; checked ${cardValue.verifiedAt}` : '; date unavailable'}{cardValue.source ? `; ${cardValue.source}` : '; source unavailable'}).
+              </Body>
+            ))}
             {p.shortfallRs === 0 && (
               <Body style={styles.small}>
                 Open the card&apos;s Redeem tab to find the best way to use the points, and check the offer with &quot;Is this redemption good?&quot;.
@@ -117,7 +123,7 @@ export default function GoalScreen() {
       )}
 
       <Text style={styles.disclaimer}>
-        Points are valued at each card&apos;s default redemption route.{' '}
+        Goal progress uses the best single card only. Each estimate uses that card&apos;s own default redemption route; reward currencies are not pooled.{' '}
         {profileSaved ? 'Months to go use the spending you saved in Find My Card.' : 'Months to go use typical spending until you save your own in Find My Card.'}{' '}
         Never spend more just to reach a goal: interest costs far more than points are worth.
       </Text>

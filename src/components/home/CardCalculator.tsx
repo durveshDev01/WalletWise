@@ -110,9 +110,11 @@ export function CardCalculator({ cards, onCompareNearby }: Props) {
               {best.card.bankName} {best.card.cardName}
             </Text>
             <View style={styles.rewardRow}>
-              <Text style={[theme.text.title, styles.reward]}>+{inr(best.estimatedValue)}</Text>
+              <Text style={[theme.text.title, styles.reward]}>≈ {inr(best.estimatedValue)}</Text>
               <Text style={theme.text.body}>{units}</Text>
             </View>
+            <Text style={theme.text.caption}>Estimated net value on {inr(amount)} spend · {best.confidence.toLowerCase()} confidence</Text>
+            {!!best.verifiedAt && <Text style={theme.text.caption}>Reward data checked {best.verifiedAt}{best.source ? ` · ${best.source}` : ''}</Text>}
             {!!best.warnings[0] && <Text style={[theme.text.caption, styles.warning]}>{best.warnings[0]}</Text>}
           </>
         ) : (

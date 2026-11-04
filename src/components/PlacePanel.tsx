@@ -42,8 +42,9 @@ export function PlacePanel({ place, cards, mode, onClose }: Props) {
       amount,
       channel: upi ? 'UPI' : 'CARD',
     });
-    // Max Value counts transfer value for points; Cashback counts only guaranteed value.
-    return mode === 'Max Value' ? [...list].sort((a, b) => b.bestValue - a.bestValue || b.estimatedValue - a.estimatedValue) : list;
+    // Transfer upsides are estimates. Cashback mode excludes point and mile rewards.
+    const comparable = mode === 'Cashback' ? list.filter((result) => result.rewardUnit === 'CASHBACK') : list;
+    return mode === 'Max Value' ? [...comparable].sort((a, b) => b.bestValue - a.bestValue || b.estimatedValue - a.estimatedValue) : comparable;
   }, [place.normalizedName, category, cards, amount, upi, mode]);
 
   const usableIds = new Set(ranked.map((r) => r.card.id));
@@ -112,7 +113,7 @@ export function PlacePanel({ place, cards, mode, onClose }: Props) {
         </View>
       </View>
 
-      <Text style={styles.label}>YOUR CARDS · RANKED ({mode === 'Max Value' ? 'max value' : 'guaranteed value'})</Text>
+      <Text style={styles.label}>YOUR CARDS · RANKED ({mode === 'Max Value' ? 'max estimated value' : 'cashback only'})</Text>
       {cards.length === 0 && (
         <Pressable style={styles.empty} onPress={() => router.push('/add-card')}>
           <Text style={styles.emptyText}>Add your cards to see which one to use here →</Text>
@@ -151,10 +152,11 @@ export function PlacePanel({ place, cards, mode, onClose }: Props) {
             </View>
             {r.rewardUnit !== 'CASHBACK' && earns && (
               <Text style={styles.detail}>
-                Worth {inr(r.estimatedValue)}
-                {r.bestValue > r.estimatedValue * 1.05 ? `, up to ${inr(r.bestValue)} if transferred` : ''}
+                Default-route estimate {inr(r.estimatedValue)}
+                {r.bestValue > r.estimatedValue * 1.05 ? `; up to ${inr(r.bestValue)} on an estimated transfer route` : ''}
               </Text>
             )}
+            <Text style={styles.warning}>Data confidence: {r.confidence.toLowerCase()}{r.verifiedAt ? ` · checked ${r.verifiedAt}` : ' · verification date unavailable'}{r.source ? ` · ${r.source}` : ''}</Text>
             {r.warnings.slice(0, 2).map((w) => (
               <Text key={w} style={styles.warning}>
                 • {w}

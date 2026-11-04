@@ -25,6 +25,10 @@ export type CardData = {
   expiryDays?: number;
   lowValue: number;
   highValue: number;
+  valueRoute: string;
+  valueConfidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  valueSource: string;
+  valueVerifiedAt: string | null;
   annualFee: string;
   renewalFee: string;
   currencyName: string;
@@ -134,6 +138,10 @@ export function toCardData(h: Holding): CardData {
     expiryDays: h.expiryDays,
     lowValue: value.low,
     highValue: value.high,
+    valueRoute: value.bestRoute.label,
+    valueConfidence: value.bestRoute.confidence,
+    valueSource: value.bestRoute.valuationSource,
+    valueVerifiedAt: value.bestRoute.valuationVerifiedAt,
     annualFee: feeText(card.annualFee, card.lifetimeFree),
     renewalFee:
       card.feeWaiverSpend != null
@@ -143,8 +151,8 @@ export function toCardData(h: Holding): CardData {
     forexMarkup: card.forexPct != null ? `${card.forexPct}% + GST` : 'Not published',
     rewardHeadline:
       card.rateMinPct != null && card.rateMaxPct != null && card.rateMaxPct > card.rateMinPct
-        ? `${card.rateMinPct}% to ${card.rateMaxPct}% value back`
-        : `${card.rateMinPct ?? card.rewards[0]?.ratePct ?? 0}% value back`,
+        ? `${card.rateMinPct}% to ${card.rateMaxPct}% estimated at default redemption value`
+        : `${card.rateMinPct ?? card.rewards[0]?.ratePct ?? 0}% estimated at default redemption value`,
     // A transfer is mentioned only when it beats the default route.
     translatorExample:
       bestRoute && h.points * bestRoute.rupeesPerPoint > value.low

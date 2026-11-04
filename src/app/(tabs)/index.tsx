@@ -41,7 +41,7 @@ export default function HomeScreen() {
     () => ({
       min: cards.reduce((acc, c) => acc + c.lowValue, 0),
       max: cards.reduce((acc, c) => acc + c.highValue, 0),
-      points: cards.reduce((acc, c) => acc + c.points, 0),
+      balances: cards.filter((c) => c.points > 0).length,
     }),
     [cards],
   );
@@ -90,7 +90,7 @@ export default function HomeScreen() {
           totalMin={totals.min}
           totalMax={totals.max}
           cardCount={cards.length}
-          totalPoints={totals.points}
+          balanceCount={totals.balances}
           isDemo={isDemo}
           onSeeHow={openWallet}
         />

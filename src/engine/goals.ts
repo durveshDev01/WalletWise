@@ -4,10 +4,19 @@
  * in airline or hotel points; these goals are priced in rupees.
  */
 import { walletValue } from './portfolio';
-import { bestRupeesPerPoint, pointsValue, safeRupeesPerPoint } from './redemption';
+import { bestRupeesPerPoint, calculateRedemptionValue, pointsValue, safeRupeesPerPoint } from './redemption';
 import type { Card, Catalog, UserProfile } from './types';
 
-export type GoalCardProgress = { cardId: string; points: number; safeRs: number; bestRs: number };
+export type GoalCardProgress = {
+  cardId: string;
+  points: number;
+  safeRs: number;
+  bestRs: number;
+  defaultRoute: string;
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  source: string | null;
+  verifiedAt: string | null;
+};
 
 export type GoalProgress = {
   targetRs: number;
@@ -43,18 +52,29 @@ export function goalProgress(
     const card = catalog.byId.get(h.cardId);
     if (!card) continue;
     const v = pointsValue(catalog, card, h.points);
-    perCard.push({ cardId: card.id, points: h.points, safeRs: v.low, bestRs: v.high });
+    perCard.push({
+      cardId: card.id,
+      points: h.points,
+      safeRs: v.low,
+      bestRs: v.high,
+      defaultRoute: v.safeRoute.label,
+      confidence: v.safeRoute.confidence,
+      source: v.safeRoute.ruleSource,
+      verifiedAt: v.safeRoute.ruleVerifiedAt,
+    });
     cards.push(card);
   }
-  const safeRs = perCard.reduce((a, c) => a + c.safeRs, 0);
-  const bestRs = perCard.reduce((a, c) => a + c.bestRs, 0);
+  // A single goal cannot be funded by adding unrelated points currencies together.
+  // Report the strongest one-card option; route-level transfers remain separate.
+  const safeRs = perCard.reduce((best, card) => Math.max(best, card.safeRs), 0);
+  const bestRs = perCard.reduce((best, card) => Math.max(best, card.bestRs), 0);
   const target = Math.max(0, targetRs);
   const shortfallRs = Math.max(0, Math.round(target - safeRs));
 
   let monthlyRewardRs = 0;
   if (profile && cards.length > 0) {
     // Safe values only, so the estimate never depends on a lucky transfer.
-    monthlyRewardRs = Math.round(walletValue(catalog, cards, { ...profile, experience: 'NEW' }).annualReward / 12);
+    monthlyRewardRs = Math.max(0, ...cards.map((card) => walletValue(catalog, [card], { ...profile, experience: 'NEW' }).annualReward / 12));
   }
   const monthsToGoal = shortfallRs === 0 ? 0 : monthlyRewardRs > 0 ? Math.ceil(shortfallRs / monthlyRewardRs) : null;
 
@@ -75,6 +95,9 @@ export type RedemptionBand = 'POOR' | 'FAIR' | 'GOOD' | 'UNKNOWN';
 
 export type RedemptionCheck = {
   rupeesPerPoint: number;
+  grossCashValueRs: number;
+  costsRs: number;
+  netValueRs: number;
   /** The card's default route value per point. */
   safeRupeesPerPoint: number;
   /** The card's best realistic route value per point. */
@@ -85,6 +108,8 @@ export type RedemptionCheck = {
   /** From this ₹/point the offer is good. */
   goodFrom: number;
   message: string;
+  quoteSource: string | null;
+  quoteVerifiedAt: string | null;
 };
 
 /**
@@ -93,10 +118,19 @@ export type RedemptionCheck = {
  * poor below 90% of the default route, good from the better of 110% of the default
  * route and 90% of the best route.
  */
-export function checkRedemption(catalog: Catalog, card: Card, pointsNeeded: number, rupeeValue: number): RedemptionCheck {
+export function checkRedemption(
+  catalog: Catalog,
+  card: Card,
+  pointsNeeded: number,
+  cashPriceAvoidedRs: number,
+  costsRs = 0,
+  quoteEvidence: { source?: string; verifiedAt?: string } = {},
+): RedemptionCheck {
   const safe = safeRupeesPerPoint(card);
   const best = Math.max(safe, bestRupeesPerPoint(catalog, card, 'SOME'));
-  const rpp = pointsNeeded > 0 ? rupeeValue / pointsNeeded : 0;
+  const value = calculateRedemptionValue({ pointsRequired: pointsNeeded, cashPriceAvoidedRs, taxesRs: 0, feesRs: costsRs, surchargesRs: 0, ...quoteEvidence });
+  const netValueRs = value?.netValueRs ?? 0;
+  const rpp = value?.netRupeesPerPoint ?? 0;
   const poorBelow = safe * 0.9;
   const goodFrom = Math.max(safe * 1.1, best * 0.9);
   const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -104,7 +138,7 @@ export function checkRedemption(catalog: Catalog, card: Card, pointsNeeded: numb
 
   let band: RedemptionBand;
   let message: string;
-  if (!(pointsNeeded > 0) || !(rupeeValue > 0) || safe <= 0) {
+  if (!(pointsNeeded > 0) || !(cashPriceAvoidedRs > 0) || costsRs < 0 || safe <= 0) {
     band = 'UNKNOWN';
     message = safe <= 0 ? 'This card has no point value in our data, so we cannot judge this offer.' : 'Enter the points needed and the rupee value offered.';
   } else if (rpp < poorBelow) {
@@ -123,11 +157,16 @@ export function checkRedemption(catalog: Catalog, card: Card, pointsNeeded: numb
 
   return {
     rupeesPerPoint: r2(rpp),
+    grossCashValueRs: r2(cashPriceAvoidedRs),
+    costsRs: r2(costsRs),
+    netValueRs: r2(netValueRs),
     safeRupeesPerPoint: r2(safe),
     bestRupeesPerPoint: r2(best),
     band,
     poorBelow: r2(poorBelow),
     goodFrom: r2(goodFrom),
     message,
+    quoteSource: value?.source ?? null,
+    quoteVerifiedAt: value?.verifiedAt ?? null,
   };
 }

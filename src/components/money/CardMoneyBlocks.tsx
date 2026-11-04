@@ -69,19 +69,25 @@ export function BillCheckLink({ catalogId }: { catalogId: string }) {
 
 const BAND_TEXT: Record<RedemptionBand, string> = { POOR: 'Poor', FAIR: 'Fair', GOOD: 'Good', UNKNOWN: '' };
 
-/** "Is this redemption good?": points needed and rupee value offered → ₹ per point and a band. */
+/** "Is this redemption good?": points needed, cash avoided and costs → net ₹ per point and a band. */
 export function RedemptionCheckBlock({ catalogId }: { catalogId: string }) {
   const card = catalog.byId.get(catalogId);
   const [points, setPoints] = useState('');
   const [value, setValue] = useState('');
+  const [costs, setCosts] = useState('');
+  const [quoteSource, setQuoteSource] = useState('');
   if (!card) return null;
-  const result = checkRedemption(catalog, card, toNumber(points), toNumber(value));
+  const costsConfirmed = costs.trim().length > 0;
+  const quoteDate = new Date().toISOString().slice(0, 10);
+  const result = costsConfirmed
+    ? checkRedemption(catalog, card, toNumber(points), toNumber(value), toNumber(costs), { source: quoteSource, verifiedAt: quoteDate })
+    : checkRedemption(catalog, card, 0, 0);
   const bandStyle = result.band === 'GOOD' ? styles.bandGood : result.band === 'POOR' ? styles.bandPoor : styles.bandFair;
 
   return (
     <View style={styles.box}>
       <Text style={styles.label}>IS THIS REDEMPTION GOOD?</Text>
-      <Text style={styles.note}>Enter what a voucher, flight or product costs in points and what it would cost in rupees.</Text>
+      <Text style={styles.note}>Enter the points used, the comparable cash price avoided, and all taxes, fees and surcharges. Net value = cash price avoided − costs.</Text>
       <View style={styles.inputs}>
         <TextInput
           value={points}
@@ -97,13 +103,33 @@ export function RedemptionCheckBlock({ catalogId }: { catalogId: string }) {
           value={value}
           onChangeText={setValue}
           keyboardType="number-pad"
-          placeholder="Worth in ₹"
+          placeholder="Cash price ₹"
           placeholderTextColor={theme.colors.textMuted}
           style={styles.input}
           keyboardAppearance="dark"
-          accessibilityLabel="Rupee value offered"
+          accessibilityLabel="Comparable cash price avoided"
         />
       </View>
+      <TextInput
+        value={costs}
+        onChangeText={setCosts}
+        keyboardType="number-pad"
+        placeholder="Taxes, fees + surcharges ₹"
+        placeholderTextColor={theme.colors.textMuted}
+        style={[styles.input, { marginTop: 8 }]}
+        keyboardAppearance="dark"
+        accessibilityLabel="Redemption taxes fees and surcharges; enter 0 if none"
+      />
+      <TextInput
+        value={quoteSource}
+        onChangeText={setQuoteSource}
+        placeholder="Quote source or URL (optional)"
+        placeholderTextColor={theme.colors.textMuted}
+        style={[styles.input, { marginTop: 8 }]}
+        keyboardAppearance="dark"
+        autoCapitalize="none"
+        accessibilityLabel="Source of the redemption quote"
+      />
       {result.band !== 'UNKNOWN' ? (
         <>
           <View style={styles.bandRow}>
@@ -112,10 +138,14 @@ export function RedemptionCheckBlock({ catalogId }: { catalogId: string }) {
               <Text style={styles.bandText}>{BAND_TEXT[result.band]}</Text>
             </View>
           </View>
+          <Row label="Cash price avoided" value={inr(result.grossCashValueRs)} />
+          <Row label="Taxes, fees and surcharges" value={`− ${inr(result.costsRs)}`} />
+          <Row label="Net redemption value" value={inr(result.netValueRs)} />
           <Text style={styles.advice}>{result.message}</Text>
+          <Text style={styles.note}>Quote checked {result.quoteVerifiedAt ?? quoteDate} · {result.quoteSource ?? 'user-entered; no source link provided'}; not independently verified by WalletWise.</Text>
         </>
       ) : (
-        !!points && !!value && <Text style={styles.advice}>{result.message}</Text>
+        costsConfirmed && !!points && !!value ? <Text style={styles.advice}>{result.message}</Text> : <Text style={styles.note}>Enter total taxes, fees and surcharges. Enter 0 only if the issuer/programme confirms there are none.</Text>
       )}
       <Text style={styles.note}>
         For this card: poor below ₹{result.poorBelow.toFixed(2)}, good from ₹{result.goodFrom.toFixed(2)} a point (from its usual ₹
