@@ -179,6 +179,8 @@ const DEMO_HOLDINGS: Holding[] = [
   { id: '4', catalogId: 'hdfc-regalia-gold', bankName: 'HDFC BANK', cardName: 'Regalia Gold', lastFour: '5678', points: 32000 },
   { id: '5', catalogId: 'hdfc-marriott-bonvoy', bankName: 'HDFC BANK', cardName: 'Marriott Bonvoy', lastFour: '9012', points: 18000 },
 ];
+const DEMO_HOLDING_IDS = new Set(DEMO_HOLDINGS.map((holding) => holding.id));
+export const isSampleHolding = (holding: Pick<Holding, 'id'>) => DEMO_HOLDING_IDS.has(holding.id);
 
 /** Random id for this install. Sent to the Aura server only for rate limiting. */
 const newUserId = () => `u-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -200,6 +202,7 @@ interface CardStore {
   ) => void;
   removeHolding: (id: string) => void;
   clearDemo: () => void;
+  removeSampleCards: () => void;
   /** Aura reply language. Missing means English. */
   auraLanguage?: 'en' | 'hi';
   /** Aura gives one number and one action in short sentences. */
@@ -223,6 +226,7 @@ interface CardStore {
   /** Spends logged by hand on the Spends screen. */
   spends: Spend[];
   addSpend: (spend: Omit<Spend, 'id'>) => void;
+  updateSpend: (id: string, changes: Partial<Omit<Spend, 'id'>>) => void;
   removeSpend: (id: string) => void;
   /** Adds cards from a "Share my wallet" code. The first real cards replace the demo wallet. */
   importCards: (cards: { catalogId: string; lastFour: string; points: number }[]) => void;
@@ -256,10 +260,9 @@ export const useCardStore = create<CardStore>()(
       setProfile: (profile) => set({ profile, profileSaved: true }),
       addCard: (catalogId, lastFour, points, billDays) =>
         set((s) => {
-          // The first real card replaces the demo wallet.
-          const base = s.isDemo ? [] : s.holdings;
-          const holdings = [...base, { ...newHolding(catalogId, lastFour, points), ...billDays }];
-          return { holdings, cards: derive(holdings), isDemo: false };
+          // Keep samples visible until the user explicitly removes them.
+          const holdings = [...s.holdings, { ...newHolding(catalogId, lastFour, points), ...billDays }];
+          return { holdings, cards: derive(holdings), isDemo: s.isDemo };
         }),
       updateHolding: (id, changes) =>
         set((s) => {
@@ -272,6 +275,11 @@ export const useCardStore = create<CardStore>()(
           return { holdings, cards: derive(holdings) };
         }),
       clearDemo: () => set({ holdings: [], cards: [], isDemo: false }),
+      removeSampleCards: () => set((s) => {
+        const sampleIds = new Set(DEMO_HOLDINGS.map((h) => h.id));
+        const holdings = s.holdings.filter((h) => !sampleIds.has(h.id));
+        return { holdings, cards: derive(holdings), isDemo: false };
+      }),
       setAuraLanguage: (auraLanguage) => set({ auraLanguage }),
       setAuraSimple: (auraSimple) => set({ auraSimple }),
       setLiteMode: (liteMode) => set({ liteMode }),
@@ -286,10 +294,11 @@ export const useCardStore = create<CardStore>()(
       spends: [],
       addSpend: (spend) =>
         set((s) => ({ spends: [...s.spends, { ...spend, id: `sp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}` }] })),
+      updateSpend: (id, changes) => set((s) => ({ spends: s.spends.map((spend) => spend.id === id ? { ...spend, ...changes } : spend) })),
       removeSpend: (id) => set((s) => ({ spends: s.spends.filter((x) => x.id !== id) })),
       importCards: (incoming) =>
         set((s) => {
-          const base = s.isDemo ? [] : s.holdings;
+          const base = s.holdings;
           // Index suffix keeps ids unique when one code holds the same card twice.
           const added = incoming
             .filter((c) => catalog.byId.has(c.catalogId))
@@ -299,7 +308,7 @@ export const useCardStore = create<CardStore>()(
             });
           if (added.length === 0) return {};
           const holdings = [...base, ...added];
-          return { holdings, cards: derive(holdings), isDemo: false };
+          return { holdings, cards: derive(holdings), isDemo: s.isDemo };
         }),
     }),
     {

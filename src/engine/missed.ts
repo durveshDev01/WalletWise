@@ -21,6 +21,7 @@ export type MissedSpend = {
   /** Rupees the used card earned (safe value, after any forex cost). */
   earned: number;
   bestCard: Card | null;
+  tiedBestCards: Card[];
   bestEarned: number;
   /** bestEarned - earned, never below 0. */
   missed: number;
@@ -56,6 +57,7 @@ export function missedRewards(
       const ranked = rankCardsForPurchase(catalog, walletCards, purchase, options);
       // Rank by what was actually earned, so a risk-adjusted score never hides a bigger reward.
       const best = [...ranked].sort((a, b) => b.netValue - a.netValue)[0] ?? null;
+      const tiedBestCards = best ? ranked.filter((candidate) => Math.abs(candidate.netValue - best.netValue) < 0.01).map((candidate) => candidate.card) : [];
       const earned = round(used?.netValue ?? 0);
       const bestEarned = round(Math.max(best?.netValue ?? 0, earned));
       const missed = Math.max(0, bestEarned - earned);
@@ -65,6 +67,7 @@ export function missedRewards(
         usedCard,
         earned,
         bestCard,
+        tiedBestCards,
         bestEarned,
         missed,
         reason: missed > 0 && best ? best.reason : used?.reason ?? 'No reward data for this card.',
