@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
@@ -13,6 +12,7 @@ import {
 import type { Card, UserProfile } from '../engine';
 import type { Spend } from '../engine/budget';
 import { shortCardName } from '../components/CardFace';
+import { encryptedZustandStorage } from '../services/localDatabase';
 
 export type CardData = {
   id: string;
@@ -296,7 +296,7 @@ export const useCardStore = create<CardStore>()(
     }),
     {
       name: 'walletwise-wallet',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => encryptedZustandStorage),
       // Card facts always come from the bundled catalog, so only the user's own data is saved.
       partialize: (s) => ({
         userId: s.userId,

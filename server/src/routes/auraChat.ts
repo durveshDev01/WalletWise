@@ -21,10 +21,16 @@ import type { LLMClient } from '../llm/index.ts';
 const MAX_BODY_BYTES = 64 * 1024;
 const REQUEST_TIMEOUT_MS = 60000;
 
-// Simple per-user limit so one client cannot exhaust the Groq quota.
+// Instance-local IP limit. The userId in a request is client supplied and is not an
+// authentication credential, so it must not be trusted as an abuse-control identity.
 const recent = new Map<string, number[]>();
 function allow(userKey: string): boolean {
   const now = Date.now();
+  // Keep the map bounded on long-lived local servers. Serverless instances reset it,
+  // so production deployments should additionally enforce limits at the gateway.
+  if (recent.size > 10_000) {
+    for (const [key, hits] of recent) if (!hits.some((t) => now - t < 60000)) recent.delete(key);
+  }
   const hits = (recent.get(userKey) ?? []).filter((t) => now - t < 60000);
   if (hits.length >= config.rateLimitPerMinute) {
     recent.set(userKey, hits);
@@ -33,6 +39,12 @@ function allow(userKey: string): boolean {
   hits.push(now);
   recent.set(userKey, hits);
   return true;
+}
+
+function requestKey(req: IncomingMessage) {
+  const forwarded = req.headers['x-forwarded-for'];
+  const first = Array.isArray(forwarded) ? forwarded[0] : forwarded?.split(',')[0];
+  return (first?.trim() || req.socket.remoteAddress || 'unknown').slice(0, 128);
 }
 
 async function readJson(req: IncomingMessage): Promise<unknown> {
@@ -97,7 +109,7 @@ export async function handleAuraChat(
     res.writeHead(400, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: parsed }));
     return;
   }
-  if (!allow(parsed.userId)) {
+  if (!allow(requestKey(req))) {
     res.writeHead(429, { 'Content-Type': 'application/json', 'Retry-After': '60' }).end(JSON.stringify({ error: BUSY_MESSAGE }));
     return;
   }

@@ -7,4 +7,11 @@
  */
 import type { ConfigContext, ExpoConfig } from 'expo/config';
 
-export default ({ config }: ConfigContext): ExpoConfig => config as ExpoConfig;
+export default ({ config }: ConfigContext): ExpoConfig => ({
+  ...config,
+  plugins: [
+    ...(config.plugins ?? []),
+    ['expo-sqlite', { useSQLCipher: true }],
+    'expo-secure-store',
+  ],
+}) as ExpoConfig;
