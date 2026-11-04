@@ -16,6 +16,10 @@ export type RecommendationResult = {
   pointsEarned: number;
   rewardUnit: 'POINTS' | 'MILES' | 'CASHBACK';
   effectiveRatePct: number;
+  confidence: PurchaseResult['confidence'];
+  source: string | null;
+  verifiedAt: string | null;
+  assumptions: string[];
   reason: string;
   warnings: string[];
 };
@@ -54,6 +58,10 @@ export function getRankedRecommendations(
     pointsEarned: r.pointsEarned,
     rewardUnit: r.rewardUnit,
     effectiveRatePct: r.effectiveRatePct,
+    confidence: r.confidence,
+    source: r.source,
+    verifiedAt: r.verifiedAt,
+    assumptions: r.assumptions,
     reason: r.reason,
     warnings: r.warnings,
   }));

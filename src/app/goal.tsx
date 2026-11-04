@@ -13,7 +13,8 @@ const IDEAS = ['Trip', 'New phone', 'Diwali gifts', 'Bill credit', 'Wedding gift
 
 /**
  * Points goals: a rupee target paid for with the points on chosen cards. Progress uses
- * each card's default (safe) route; months to go use normal spending, never extra spend.
+ * each card's default route separately (no pooling); months to go use the strongest
+ * single-card estimate from normal spending, never extra spend.
  */
 export default function GoalScreen() {
   const goals = useCardStore((s) => s.goals) ?? [];
@@ -22,14 +23,18 @@ export default function GoalScreen() {
   const profileSaved = useCardStore((s) => s.profileSaved);
   const addGoal = useCardStore((s) => s.addGoal);
   const removeGoal = useCardStore((s) => s.removeGoal);
+  const updateGoal = useCardStore((s) => s.updateGoal);
 
   const [adding, setAdding] = useState(goals.length === 0);
   const [name, setName] = useState('');
   const [target, setTarget] = useState('');
   const [picked, setPicked] = useState<string[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const save = () => {
-    addGoal({ name: name.trim() || 'My goal', targetRs: toNumber(target), holdingIds: picked });
+    const data = { name: name.trim() || 'My goal', targetRs: toNumber(target), holdingIds: picked };
+    if (editingId) updateGoal(editingId, data); else addGoal(data);
+    setEditingId(null);
     setName('');
     setTarget('');
     setPicked([]);
@@ -57,6 +62,7 @@ export default function GoalScreen() {
           <Panel key={g.id} tone={p.shortfallRs === 0 ? 'good' : 'gold'}>
             <View style={styles.goalTop}>
               <Text style={styles.goalName}>{g.name}</Text>
+              <Pressable onPress={() => { setEditingId(g.id); setName(g.name); setTarget(String(g.targetRs)); setPicked(g.holdingIds.filter((id) => holdings.some((h) => h.id === id))); setAdding(true); }} accessibilityRole="button"><Text style={styles.remove}>Edit</Text></Pressable>
               <Pressable onPress={() => confirmRemove(g)} accessibilityRole="button" accessibilityLabel={`Remove goal ${g.name}`} hitSlop={10}>
                 <Text style={styles.remove}>Remove</Text>
               </Pressable>
@@ -65,8 +71,8 @@ export default function GoalScreen() {
               <View style={[styles.fill, { width: `${Math.max(2, pct)}%` }]} />
             </View>
             <StatRow label="Target" value={inr(p.targetRs)} />
-            <StatRow label="Your points are worth" value={inr(p.safeRs)} tone="gold" />
-            {p.bestRs > p.safeRs && <StatRow label="With the best redemptions" value={`up to ${inr(p.bestRs)}`} />}
+            <StatRow label="Best one-card default-route value" value={inr(p.safeRs)} tone="gold" />
+            {p.bestRs > p.safeRs && <StatRow label="Best one-card estimated route" value={`up to ${inr(p.bestRs)}`} />}
             <StatRow label="Still needed" value={p.shortfallRs === 0 ? 'Reached!' : inr(p.shortfallRs)} tone={p.shortfallRs === 0 ? 'good' : undefined} />
             {p.shortfallRs > 0 && (
               <StatRow
@@ -75,6 +81,11 @@ export default function GoalScreen() {
               />
             )}
             <Body style={styles.small}>Counting: {cardNames}</Body>
+            {p.perCard.map((cardValue) => (
+              <Body key={cardValue.cardId} style={styles.small}>
+                {catalog.byId.get(cardValue.cardId)?.name ?? cardValue.cardId}: {inr(cardValue.safeRs)} via {cardValue.defaultRoute} ({cardValue.confidence.toLowerCase()} confidence{cardValue.verifiedAt ? `; checked ${cardValue.verifiedAt}` : '; date unavailable'}{cardValue.source ? `; ${cardValue.source}` : '; source unavailable'}).
+              </Body>
+            ))}
             {p.shortfallRs === 0 && (
               <Body style={styles.small}>
                 Open the card&apos;s Redeem tab to find the best way to use the points, and check the offer with &quot;Is this redemption good?&quot;.
@@ -86,7 +97,7 @@ export default function GoalScreen() {
 
       {adding ? (
         <Panel>
-          <Text style={styles.goalName}>New goal</Text>
+          <Text style={styles.goalName}>{editingId ? 'Edit goal' : 'New goal'}</Text>
           <Label>WHAT ARE YOU SAVING FOR?</Label>
           <Chips options={IDEAS.map((i) => ({ value: i, label: i }))} value={name} onChange={setName} />
           <TextInput
@@ -100,7 +111,7 @@ export default function GoalScreen() {
           />
           <Label>HOW MUCH DOES IT COST?</Label>
           <MoneyInput value={target} onChangeText={setTarget} accessibilityLabel="Goal amount in rupees" />
-          <Label>WHICH CARDS&apos; POINTS COUNT? (NONE PICKED = ALL)</Label>
+          <Label>WHICH CARD BALANCES MAY BE COUNTED? (NONE PICKED = EACH CURRENT CARD SEPARATELY)</Label>
           {holdings.length > 0 ? (
             <Chips
               options={holdings.map((h) => ({ value: h.id, label: catalog.byId.get(h.catalogId)?.name ?? h.cardName }))}
@@ -110,14 +121,14 @@ export default function GoalScreen() {
           ) : (
             <Body>Add a card to your wallet first.</Body>
           )}
-          <PrimaryButton label={toNumber(target) > 0 ? 'Save goal' : 'Enter the amount first'} onPress={save} disabled={!(toNumber(target) > 0)} />
+          <PrimaryButton label={toNumber(target) > 0 ? (editingId ? 'Save changes' : 'Save goal') : 'Enter the amount first'} onPress={save} disabled={!(toNumber(target) > 0)} />
         </Panel>
       ) : (
         <PrimaryButton label="Add a goal" onPress={() => setAdding(true)} />
       )}
 
       <Text style={styles.disclaimer}>
-        Points are valued at each card&apos;s default redemption route.{' '}
+        Goal progress uses the best single card only. Each estimate uses that card&apos;s own default redemption route; reward currencies are not pooled.{' '}
         {profileSaved ? 'Months to go use the spending you saved in Find My Card.' : 'Months to go use typical spending until you save your own in Find My Card.'}{' '}
         Never spend more just to reach a goal: interest costs far more than points are worth.
       </Text>

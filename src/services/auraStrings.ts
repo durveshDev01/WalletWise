@@ -121,7 +121,7 @@ export const SETTINGS_STRINGS: Record<AppLanguage, SettingsStrings> = {
     profileHint: 'Your monthly spends, used by Find My Card and Aura.',
     privacySection: 'YOUR DATA',
     privacy:
-      'Your cards, points, spends and goals stay on this phone. There is no account. When you ask Aura, your question goes to the WalletWise server with your card list, points and spending profile (never card numbers or your name), and the answer is written by the Groq AI service. Map search sends the place you type to Mapbox.',
+      'Your cards, points, spends and goals stay on this phone unless you choose to create an encrypted cloud backup. When you ask Aura, your question goes to the WalletWise server with your card list, points and spending profile (never card numbers or your name), and the answer is written by the Groq AI service. Map search sends the place you type to Mapbox.',
   },
   hi: {
     title: 'सेटिंग्स',

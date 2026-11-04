@@ -109,11 +109,16 @@ export function earnSegments(
   return segments;
 }
 
-function confidenceFor(segment: EarnSegment | undefined, p: Purchase, card: Card): Confidence {
+function confidenceFor(segment: EarnSegment | undefined, p: Purchase, card: Card, today: string): Confidence {
   if (!segment || segment.excluded) return 'LOW';
   if (p.international && card.forexPct == null) return 'LOW';
-  if (p.channel === 'UPI') return 'MEDIUM';
-  return segment.row.category === 'DEFAULT' && !segment.row.merchants ? 'MEDIUM' : 'HIGH';
+  let confidence: Confidence = p.channel === 'UPI' || (segment.row.category === 'DEFAULT' && !segment.row.merchants) ? 'MEDIUM' : 'HIGH';
+  const verifiedAt = card.verifiedAt ?? card.lastChanged;
+  if (!verifiedAt) return confidence === 'HIGH' ? 'MEDIUM' : 'LOW';
+  const ageDays = (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${verifiedAt}T00:00:00Z`)) / 86_400_000;
+  if (!Number.isFinite(ageDays) || ageDays > 365) return 'LOW';
+  if (ageDays > 180 && confidence === 'HIGH') confidence = 'MEDIUM';
+  return confidence;
 }
 
 const rupees = (n: number) => `₹${n >= 100 ? Math.round(n).toLocaleString('en-IN') : n.toFixed(2).replace(/\.00$/, '')}`;
@@ -204,8 +209,18 @@ export function scorePurchase(
 
   const netValue = safeValue - forexCost;
   const isPoints = !upiEarning && primary ? primary.row.type !== 'CASHBACK' : false;
-  const { risk, upcomingCuts } = devaluationRisk(catalog, card.id, today);
-  const score = netValue >= 0 && isPoints ? netValue * (1 - risk) : netValue;
+  const { upcomingCuts } = devaluationRisk(catalog, card.id, today);
+  const sourceVerifiedAt = card.verifiedAt ?? card.lastChanged ?? null;
+  if (sourceVerifiedAt) {
+    const ageDays = (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${sourceVerifiedAt}T00:00:00Z`)) / 86_400_000;
+    if (!Number.isFinite(ageDays) || ageDays > 365) warnings.push(`Reward data is stale (last checked ${sourceVerifiedAt}); verify the issuer terms before relying on this estimate.`);
+    else if (ageDays > 180) warnings.push(`Reward data was last checked ${sourceVerifiedAt}; confirm current issuer terms.`);
+  } else {
+    warnings.push('No verification date is recorded for this reward data.');
+  }
+  // Keep the ranking unit explicit: comparable net rupees after costs. Confidence,
+  // speculative best-route value, and devaluation risk are shown separately.
+  const score = netValue;
   if (upcomingCuts.length > 0) {
     warnings.push(`Upcoming change on ${upcomingCuts[0].date}: ${upcomingCuts[0].title}.`);
   }
@@ -237,19 +252,27 @@ export function scorePurchase(
     netValue: round2(netValue),
     score,
     effectiveRatePct: round2(effectiveRatePct),
+    estimatedReturnPct: p.amount > 0 ? round2((netValue / p.amount) * 100) : 0,
     pointsEarned: Math.round(pointsEarned),
     rewardUnit: upiEarning ? 'CASHBACK' : unitFor(primary?.row ?? null),
     row: primary?.row ?? null,
     rowIndex: primary?.rowIndex ?? -1,
     usesPortal: !!primary?.row.portal,
-    confidence: confidenceFor(primary, p, card),
+    confidence: confidenceFor(primary, p, card, today),
+    source: card.source ?? card.url ?? null,
+    verifiedAt: sourceVerifiedAt,
+    assumptions: [
+      ...(isPoints ? ['Reward value uses the card currency’s default value; transfer values are estimates and are not cash.'] : []),
+      ...(p.international && card.forexPct == null ? [`Forex markup assumed at ${DEFAULT_FOREX_PCT}% plus GST.`] : []),
+      ...(primary?.row.capRs != null ? [`Monthly reward cap: ₹${primary.row.capRs.toLocaleString('en-IN')} for this rule.`] : []),
+    ],
     reason,
     warnings,
     capUse,
   };
 }
 
-/** Ranks cards for a purchase, best first. Ties break on best value, then lower fee. */
+/** Ranks cards by comparable net rupees for this purchase; ties break by an explicitly labelled estimated upside, then lower fee. */
 export function rankCardsForPurchase(
   catalog: Catalog,
   cards: Card[],

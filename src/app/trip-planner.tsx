@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { catalog } from '../data/catalog';
-import { planTripPayment, skyscannerUrl, walletValue } from '../engine';
+import { planTripPayment, skyscannerUrl } from '../engine';
 import type { Card } from '../engine';
 import { useCardStore } from '../store/useCardStore';
 import { colors, typography } from '../theme';
@@ -55,8 +55,7 @@ export default function TripPlannerScreen() {
       .map((c) => ({ card: catalog.byId.get(c.catalogId), points: c.points }))
       .filter((h): h is { card: Card; points: number } => !!h.card);
     if (fareRs <= 0 || holdings.length === 0) return null;
-    const monthlyRewardRs = walletValue(catalog, holdings.map((h) => h.card), profile).annualReward / 12;
-    return planTripPayment(catalog, holdings, fareRs, { experience: profile.experience, monthlyRewardRs });
+    return planTripPayment(catalog, holdings, fareRs, { experience: profile.experience, kind: 'FLIGHT' });
   }, [cards, profile, fareRs]);
 
   const openSkyscanner = () => {
@@ -75,7 +74,7 @@ export default function TripPlannerScreen() {
         <Text style={styles.backText}>← Back</Text>
       </Pressable>
       <Text style={styles.title}>Trip Planner</Text>
-      <Text style={styles.sub}>Find the cash fare, then see whether to pay with a card, with points, or both.</Text>
+      <Text style={styles.sub}>Check a cash fare, compare the card return, and review each eligible airline programme separately. Award prices and seat availability are not live here.</Text>
 
       <Text style={styles.section}>POPULAR ROUTES</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
@@ -144,38 +143,31 @@ export default function TripPlannerScreen() {
             <Text style={styles.sub}>None of your cards earns on travel.</Text>
           )}
 
-          <Text style={styles.section}>OPTION 2 · PAY WITH YOUR POINTS</Text>
-          {plan.pointsMix.length === 0 ? (
-            <Text style={styles.sub}>No points recorded yet. Open a card in your Wallet and enter its balance.</Text>
+          <Text style={styles.section}>AIRLINE PARTNER BALANCES · ESTIMATES</Text>
+          {plan.pointsOptions.length === 0 ? (
+            <Text style={styles.sub}>No eligible airline transfer route is recorded for the points in your Wallet. Cashback and unrelated reward currencies cannot be used as airline miles.</Text>
           ) : (
-            plan.pointsMix.map((p) => (
-              <View key={p.cardId} style={styles.mixRow}>
+            plan.pointsOptions.map((p) => (
+              <View key={p.id} style={styles.mixRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.resultTitle}>{holdingName(p.cardId)}</Text>
                   <Text style={styles.resultSub}>
-                    {p.route} · about ₹{p.rupeesPerPoint} per point{p.confidence !== 'HIGH' ? ' (estimate)' : ''}
+                    {p.route} · estimated ₹{p.rupeesPerPoint.toFixed(2)} per source point · {p.confidence.toLowerCase()} confidence
+                    {p.ruleSource ? `\nTransfer rule source: ${p.ruleSource}` : ''}{p.ruleVerifiedAt ? ` · checked ${p.ruleVerifiedAt}` : ' · rule date unavailable'}
+                    {p.source ? `\nValuation: ${p.source}` : ''}{p.verifiedAt ? ` · valued ${p.verifiedAt}` : ' · valuation has no verification date'}
                   </Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={styles.mixPoints}>{p.pointsUsed.toLocaleString('en-IN')} pts</Text>
-                  <Text style={styles.resultSub}>{inr(p.valueRs)}</Text>
+                  <Text style={styles.mixPoints}>{p.pointsUsed.toLocaleString('en-IN')} pts held</Text>
+                  <Text style={styles.resultSub}>≈ {inr(p.valueRs)} route value</Text>
                 </View>
               </View>
             ))
           )}
 
-          <View style={[styles.summary, plan.shortfallRs > 0 ? styles.summaryShort : styles.summaryOk]}>
-            {plan.shortfallRs > 0 ? (
-              <>
-                <Text style={styles.summaryTitle}>Points cover {inr(plan.coveredRs)} of {inr(plan.fareRs)}</Text>
-                <Text style={styles.summaryText}>
-                  You need {inr(plan.shortfallRs)} more.{' '}
-                  {plan.monthsToCover ? `At your normal spending your cards earn this in about ${plan.monthsToCover} months.` : 'Pay the rest in cash with the card above.'}
-                </Text>
-              </>
-            ) : (
-              <Text style={styles.summaryTitle}>Your points can cover the whole fare</Text>
-            )}
+          <View style={styles.summary}>
+            <Text style={styles.summaryTitle}>Estimated value is not award-fare coverage</Text>
+            <Text style={styles.summaryText}>This page does not know the actual award price, seat availability, taxes or fees. Only the airline quote can establish the points and net redemption value for this trip.</Text>
           </View>
 
           {plan.notes.map((n) => (
@@ -183,7 +175,6 @@ export default function TripPlannerScreen() {
               • {n}
             </Text>
           ))}
-          <Text style={styles.note}>• Award seats (booking directly with airline miles) can cost far fewer points on some routes; check the airline before transferring.</Text>
         </>
       )}
     </ScrollView>

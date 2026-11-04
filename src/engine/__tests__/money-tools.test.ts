@@ -85,11 +85,19 @@ describe('revolvingCost', () => {
     const r = revolvingCost({ balance: 10000, aprMonthlyPct: 3.75 });
     const m1 = r.schedule[0];
     assert.equal(m1.payment, 500);
-    assert.equal(m1.interest, 356.25); // 9,500 x 3.75%
-    assert.equal(m1.gst, 64.13); // 18% of 356.25
-    assert.equal(m1.closing, 9920.38);
+    assert.equal(m1.interest, 351.37); // 9,500 x (3.75% x 12) x 30/365
+    assert.equal(m1.gst, 63.25); // 18% GST
+    assert.equal(m1.closing, 9914.62);
     assert.equal(r.status, 'CLEARS');
     assert.ok(r.months! > 60, `minimum-only should take years, got ${r.months} months`);
+  });
+
+  it('uses saved statement-cycle days in interest arithmetic', () => {
+    const short = revolvingCost({ balance: 10000, aprMonthlyPct: 3.75, cycleDays: 28 });
+    const long = revolvingCost({ balance: 10000, aprMonthlyPct: 3.75, cycleDays: 31 });
+    assert.equal(short.cycleDays, 28);
+    assert.ok(long.firstMonthInterest > short.firstMonthInterest);
+    assert.match(long.assumptions.join(' '), /31 calendar days/);
   });
 
   it('total paid equals the balance plus interest and GST when it clears', () => {
@@ -255,6 +263,12 @@ describe('goalProgress', () => {
     assert.equal(goalProgress(cat, 1000, [{ cardId: 'base1', points: 5000 }]).monthsToGoal, 0);
     assert.equal(goalProgress(cat, 9000, [{ cardId: 'base1', points: 5000 }]).monthsToGoal, null);
   });
+
+  it('does not combine unrelated card balances to claim a single goal is reached', () => {
+    const r = goalProgress(cat, 10000, [{ cardId: 'base1', points: 5000 }, { cardId: 'online5', points: 5000 }]);
+    assert.equal(r.safeRs, 5000);
+    assert.equal(r.progress, 0.5);
+  });
 });
 
 describe('checkRedemption', () => {
@@ -265,6 +279,14 @@ describe('checkRedemption', () => {
     assert.equal(checkRedemption(cat, base1, 1000, 1000).band, 'FAIR');
     assert.equal(checkRedemption(cat, base1, 1000, 1200).band, 'GOOD');
     assert.equal(checkRedemption(cat, base1, 0, 1200).band, 'UNKNOWN');
+  });
+
+  it('subtracts redemption costs before computing net rupees per point', () => {
+    const result = checkRedemption(cat, base1, 1000, 1000, 200);
+    assert.equal(result.grossCashValueRs, 1000);
+    assert.equal(result.costsRs, 200);
+    assert.equal(result.netValueRs, 800);
+    assert.equal(result.rupeesPerPoint, 0.8);
   });
 
   it('uses transfer values on a real points card', () => {

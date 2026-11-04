@@ -17,6 +17,7 @@ export type Spend = {
   /** Local date, YYYY-MM-DD. */
   date: string;
   online?: boolean;
+  paymentMode?: 'CARD' | 'UPI' | 'DEBIT' | 'CASH';
 };
 
 /** The wallet card a spend was paid with. */

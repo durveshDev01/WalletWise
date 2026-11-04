@@ -52,11 +52,12 @@ const FILTER_LABEL = (f: SpendFilter) => (f === 'Pharmacy / Health' ? 'Pharmacy'
 const inr = (n: number) => `₹${n >= 100 ? Math.round(n).toLocaleString('en-IN') : n.toFixed(2).replace(/\.00$/, '')}`;
 const distanceText = (km: number) => (km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`);
 
-/** Best card for a place under the chosen mode. Max Value counts transfer value; Cashback only guaranteed value. */
+/** Best card for a place under the chosen mode. Transfer upsides remain estimates. */
 function bestFor(place: EnrichedPlace, mode: RankMode): RecommendationResult | null {
-  if (place.ranked.length === 0) return null;
-  if (mode === 'Cashback') return place.ranked[0];
-  return [...place.ranked].sort((a, b) => b.bestValue - a.bestValue || b.estimatedValue - a.estimatedValue)[0];
+  const rows = mode === 'Cashback' ? place.ranked.filter((row) => row.rewardUnit === 'CASHBACK') : place.ranked;
+  if (rows.length === 0) return null;
+  if (mode === 'Cashback') return rows[0];
+  return [...rows].sort((a, b) => b.bestValue - a.bestValue || b.estimatedValue - a.estimatedValue)[0];
 }
 
 // ── Place row in the sheet ─────────────────────────────
@@ -518,7 +519,7 @@ export default function MapScreen() {
                     onPress={() => setRankMode(m)}
                     accessibilityRole="radio"
                     accessibilityState={{ selected: rankMode === m }}
-                    accessibilityLabel={m === 'Max Value' ? 'Rank by maximum value including transfers' : 'Rank by guaranteed value'}
+                    accessibilityLabel={m === 'Max Value' ? 'Rank by maximum estimated value including transfers' : 'Show cashback cards only'}
                     style={[styles.segmentItem, rankMode === m && styles.segmentItemOn]}
                   >
                     <Text style={[theme.text.body, styles.segmentText, rankMode === m && styles.segmentTextOn]}>{m}</Text>

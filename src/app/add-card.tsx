@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -23,6 +23,7 @@ export default function AddCardScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const addCard = useCardStore((s) => s.addCard);
+  const removeSampleCards = useCardStore((s) => s.removeSampleCards);
   const isDemo = useCardStore((s) => s.isDemo);
 
   const [query, setQuery] = useState('');
@@ -39,6 +40,9 @@ export default function AddCardScreen() {
 
   const save = () => {
     if (!picked) return;
+    if (points.trim() === '' || !/^\d+$/.test(points.trim())) { Alert.alert('Enter your balance', 'Enter the points or cashback balance from your issuer app. Enter 0 if you do not know it yet.'); return; }
+    const invalidDay = [statementDay, dueDay].find((day) => day.trim() && !parseBillDay(day));
+    if (invalidDay) { Alert.alert('Check bill day', 'Statement and due days must be whole numbers from 1 to 31.'); return; }
     addCard(picked.id, lastFour.replace(/\D/g, '').slice(-4), Number(points.replace(/\D/g, '')) || 0, {
       statementDay: parseBillDay(statementDay),
       dueDay: parseBillDay(dueDay),
@@ -113,11 +117,12 @@ export default function AddCardScreen() {
         </View>
         <Text style={styles.hint}>With a due day, WalletWise can remind you 3 days and 1 day before each bill.</Text>
         <Text style={styles.hint}>WalletWise never asks for your full card number, CVV or PIN. Everything stays on this phone.</Text>
-        {isDemo && <Text style={styles.hint}>Your first card replaces the sample cards.</Text>}
+        {isDemo && <Text style={styles.hint}>Sample cards stay in your wallet when you add this card. You can remove them later.</Text>}
 
         <Pressable style={styles.primary} onPress={save} accessibilityRole="button">
           <Text style={styles.primaryText}>Add to my wallet</Text>
         </Pressable>
+        {isDemo && <Pressable style={styles.back} onPress={() => { removeSampleCards(); }} accessibilityRole="button"><Text style={styles.backText}>Remove sample cards and continue adding</Text></Pressable>}
       </ScrollView>
     );
   }
@@ -128,7 +133,7 @@ export default function AddCardScreen() {
         <Text style={styles.backText}>← Back</Text>
       </Pressable>
       <Text style={styles.title}>Add a card</Text>
-      <Text style={styles.sub}>Search {catalog.cards.length} Indian credit cards.</Text>
+      <Text style={styles.sub}>Search {catalog.cards.length} catalogued Indian credit cards. Cards not in this catalog cannot yet be added accurately; contact support to request one.</Text>
       <TextInput
         value={query}
         onChangeText={setQuery}

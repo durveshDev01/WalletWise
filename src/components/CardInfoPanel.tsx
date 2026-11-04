@@ -14,7 +14,7 @@ export function CardInfoPanel({ card }: { card: CardData }) {
       
       <View style={styles.statsRow}>
         <View style={styles.statBlock}>
-          <Text style={styles.statLabel}>POINTS BALANCE</Text>
+          <Text style={styles.statLabel}>{card.currencyName.toUpperCase()} BALANCE</Text>
           <Text style={styles.statValue}>{card.points.toLocaleString('en-IN')}</Text>
         </View>
         <View style={styles.statBlockRight}>

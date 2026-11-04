@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
@@ -13,6 +12,7 @@ import {
 import type { Card, UserProfile } from '../engine';
 import type { Spend } from '../engine/budget';
 import { shortCardName } from '../components/CardFace';
+import { encryptedZustandStorage } from '../services/localDatabase';
 
 export type CardData = {
   id: string;
@@ -25,6 +25,10 @@ export type CardData = {
   expiryDays?: number;
   lowValue: number;
   highValue: number;
+  valueRoute: string;
+  valueConfidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  valueSource: string;
+  valueVerifiedAt: string | null;
   annualFee: string;
   renewalFee: string;
   currencyName: string;
@@ -134,6 +138,10 @@ export function toCardData(h: Holding): CardData {
     expiryDays: h.expiryDays,
     lowValue: value.low,
     highValue: value.high,
+    valueRoute: value.bestRoute.label,
+    valueConfidence: value.bestRoute.confidence,
+    valueSource: value.bestRoute.valuationSource,
+    valueVerifiedAt: value.bestRoute.valuationVerifiedAt,
     annualFee: feeText(card.annualFee, card.lifetimeFree),
     renewalFee:
       card.feeWaiverSpend != null
@@ -143,8 +151,8 @@ export function toCardData(h: Holding): CardData {
     forexMarkup: card.forexPct != null ? `${card.forexPct}% + GST` : 'Not published',
     rewardHeadline:
       card.rateMinPct != null && card.rateMaxPct != null && card.rateMaxPct > card.rateMinPct
-        ? `${card.rateMinPct}% to ${card.rateMaxPct}% value back`
-        : `${card.rateMinPct ?? card.rewards[0]?.ratePct ?? 0}% value back`,
+        ? `${card.rateMinPct}% to ${card.rateMaxPct}% estimated at default redemption value`
+        : `${card.rateMinPct ?? card.rewards[0]?.ratePct ?? 0}% estimated at default redemption value`,
     // A transfer is mentioned only when it beats the default route.
     translatorExample:
       bestRoute && h.points * bestRoute.rupeesPerPoint > value.low
@@ -171,6 +179,8 @@ const DEMO_HOLDINGS: Holding[] = [
   { id: '4', catalogId: 'hdfc-regalia-gold', bankName: 'HDFC BANK', cardName: 'Regalia Gold', lastFour: '5678', points: 32000 },
   { id: '5', catalogId: 'hdfc-marriott-bonvoy', bankName: 'HDFC BANK', cardName: 'Marriott Bonvoy', lastFour: '9012', points: 18000 },
 ];
+const DEMO_HOLDING_IDS = new Set(DEMO_HOLDINGS.map((holding) => holding.id));
+export const isSampleHolding = (holding: Pick<Holding, 'id'>) => DEMO_HOLDING_IDS.has(holding.id);
 
 /** Random id for this install. Sent to the Aura server only for rate limiting. */
 const newUserId = () => `u-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -192,6 +202,7 @@ interface CardStore {
   ) => void;
   removeHolding: (id: string) => void;
   clearDemo: () => void;
+  removeSampleCards: () => void;
   /** Aura reply language. Missing means English. */
   auraLanguage?: 'en' | 'hi';
   /** Aura gives one number and one action in short sentences. */
@@ -215,6 +226,7 @@ interface CardStore {
   /** Spends logged by hand on the Spends screen. */
   spends: Spend[];
   addSpend: (spend: Omit<Spend, 'id'>) => void;
+  updateSpend: (id: string, changes: Partial<Omit<Spend, 'id'>>) => void;
   removeSpend: (id: string) => void;
   /** Adds cards from a "Share my wallet" code. The first real cards replace the demo wallet. */
   importCards: (cards: { catalogId: string; lastFour: string; points: number }[]) => void;
@@ -248,10 +260,9 @@ export const useCardStore = create<CardStore>()(
       setProfile: (profile) => set({ profile, profileSaved: true }),
       addCard: (catalogId, lastFour, points, billDays) =>
         set((s) => {
-          // The first real card replaces the demo wallet.
-          const base = s.isDemo ? [] : s.holdings;
-          const holdings = [...base, { ...newHolding(catalogId, lastFour, points), ...billDays }];
-          return { holdings, cards: derive(holdings), isDemo: false };
+          // Keep samples visible until the user explicitly removes them.
+          const holdings = [...s.holdings, { ...newHolding(catalogId, lastFour, points), ...billDays }];
+          return { holdings, cards: derive(holdings), isDemo: s.isDemo };
         }),
       updateHolding: (id, changes) =>
         set((s) => {
@@ -264,6 +275,11 @@ export const useCardStore = create<CardStore>()(
           return { holdings, cards: derive(holdings) };
         }),
       clearDemo: () => set({ holdings: [], cards: [], isDemo: false }),
+      removeSampleCards: () => set((s) => {
+        const sampleIds = new Set(DEMO_HOLDINGS.map((h) => h.id));
+        const holdings = s.holdings.filter((h) => !sampleIds.has(h.id));
+        return { holdings, cards: derive(holdings), isDemo: false };
+      }),
       setAuraLanguage: (auraLanguage) => set({ auraLanguage }),
       setAuraSimple: (auraSimple) => set({ auraSimple }),
       setLiteMode: (liteMode) => set({ liteMode }),
@@ -278,10 +294,11 @@ export const useCardStore = create<CardStore>()(
       spends: [],
       addSpend: (spend) =>
         set((s) => ({ spends: [...s.spends, { ...spend, id: `sp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}` }] })),
+      updateSpend: (id, changes) => set((s) => ({ spends: s.spends.map((spend) => spend.id === id ? { ...spend, ...changes } : spend) })),
       removeSpend: (id) => set((s) => ({ spends: s.spends.filter((x) => x.id !== id) })),
       importCards: (incoming) =>
         set((s) => {
-          const base = s.isDemo ? [] : s.holdings;
+          const base = s.holdings;
           // Index suffix keeps ids unique when one code holds the same card twice.
           const added = incoming
             .filter((c) => catalog.byId.has(c.catalogId))
@@ -291,12 +308,12 @@ export const useCardStore = create<CardStore>()(
             });
           if (added.length === 0) return {};
           const holdings = [...base, ...added];
-          return { holdings, cards: derive(holdings), isDemo: false };
+          return { holdings, cards: derive(holdings), isDemo: s.isDemo };
         }),
     }),
     {
       name: 'walletwise-wallet',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => encryptedZustandStorage),
       // Card facts always come from the bundled catalog, so only the user's own data is saved.
       partialize: (s) => ({
         userId: s.userId,

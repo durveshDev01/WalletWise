@@ -16,6 +16,7 @@ import {
   toNumber,
 } from '../components/money/MoneyUi';
 import { catalog } from '../data/catalog';
+import { billDateInMonth } from '../engine/billing';
 import { cardMonthlyRate, cashWithdrawalCost, DEFAULT_MIN_DUE_PCT, emiCost, revolvingCost, rewardsOnSpend } from '../engine';
 import { useCardStore } from '../store/useCardStore';
 import { theme } from '../theme';
@@ -50,6 +51,12 @@ export default function BillCheckScreen() {
     params.card && catalog.byId.has(params.card) ? params.card : holdings[0]?.catalogId ?? null,
   );
   const card = cardId ? catalog.byId.get(cardId) ?? null : null;
+  const matchingHolding = holdings.find((holding) => holding.catalogId === cardId);
+  const now = new Date();
+  const cycleAnchorDay = matchingHolding?.dueDay ?? matchingHolding?.statementDay;
+  const statementCycleDays = cycleAnchorDay
+    ? Math.round((billDateInMonth(now.getFullYear(), now.getMonth() + 1, cycleAnchorDay).getTime() - billDateInMonth(now.getFullYear(), now.getMonth(), cycleAnchorDay).getTime()) / 86_400_000)
+    : 30;
   const rate = cardMonthlyRate(card);
   const rateText = `${rate.pct}% a month${rate.source === 'ASSUMED' ? ' (assumed, this card does not publish a rate)' : ' (from card data)'}`;
 
@@ -76,6 +83,7 @@ export default function BillCheckScreen() {
     // Left out while it is the default, so the result labels it as assumed.
     minDuePct: minPctEdited && toNumber(minPct) > 0 ? toNumber(minPct) : undefined,
     newMonthlySpend: toNumber(newSpend),
+    cycleDays: cycleAnchorDay ? statementCycleDays : undefined,
   });
   const emiResult = emiCost({
     price: toNumber(price),
@@ -103,6 +111,13 @@ export default function BillCheckScreen() {
       <Label>WHICH CARD? (FOR THE INTEREST RATE)</Label>
       <CardPicker value={cardId} onChange={setCardId} />
       <Body style={styles.rate}>Interest: {rateText}</Body>
+      <Body style={styles.rate}>
+        {matchingHolding?.statementDay && matchingHolding.dueDay
+          ? `Using your saved statement day ${matchingHolding.statementDay} and due day ${matchingHolding.dueDay}. The projection applies the actual calendar length between successive due dates (${statementCycleDays} days) using an annualized daily-rate approximation. Exact interest depends on transaction dates and issuer terms.`
+          : cycleAnchorDay
+            ? `Using saved ${matchingHolding?.dueDay ? 'due' : 'statement'} day ${cycleAnchorDay}; the projection uses ${statementCycleDays} calendar days per cycle with an annualized daily-rate approximation. Save both dates in card details for bill-cycle context.`
+            : `Statement and due days are missing. Add them in card details. This estimate uses a 30-day cycle assumption and annualizes the monthly rate to calendar days. Exact interest depends on transaction dates and issuer terms.`}
+      </Body>
 
       {mode === 'MIN' && (
         <>
@@ -124,6 +139,7 @@ export default function BillCheckScreen() {
               </Text>
               <StatRow label="First minimum payment" value={inr(minResult.firstPayment)} />
               <StatRow label="Interest + GST in the first month" value={inr(minResult.firstMonthInterest)} tone="danger" />
+              <Body style={styles.plain}>{`Worked example: after the first minimum payment, ${inr(Math.max(0, toNumber(balance) - minResult.firstPayment))} × (${minResult.monthlyPct}% × 12) × ${minResult.cycleDays}/365 = about ${inr(minResult.schedule[0]?.interest ?? 0)} interest; 18% GST adds ${inr(minResult.schedule[0]?.gst ?? 0)}.`}</Body>
               {afterYear != null && minResult.status !== 'NEVER' && <StatRow label="Still owed after 12 months" value={inr(afterYear)} />}
               {minResult.status === 'CLEARS' && (
                 <>

@@ -147,6 +147,39 @@ are protected by Vercel Authentication by default, so the app cannot call them.
 `.env` is not uploaded to EAS (it is in `.gitignore`), which is why the values go into EAS
 environment variables.
 
+## 4. Wallet storage and account recovery
+
+- Native builds store the local wallet in SQLite with SQLCipher. The database key is held in
+  Expo SecureStore. The app needs a development or production build with the config plugin;
+  Expo Go does not contain this SQLCipher configuration.
+- The web preview uses AsyncStorage and is **not encrypted at rest**. Use native builds for
+  private wallet data.
+- The app stores only the last four digits for a card. Never add a full card number or CVV to
+  the local or cloud wallet schema.
+- Supabase is an optional account backup. Set `EXPO_PUBLIC_SUPABASE_URL` and
+  `EXPO_PUBLIC_SUPABASE_ANON_KEY` in the local `.env` and in the EAS environment used by the
+  build. These are public client settings; never put a service-role key in the app.
+- The migrations in `supabase/migrations/` create `public.user_data` with forced row-level
+  security and policies that bind every row to `auth.uid()`. They have been applied to the
+  WalletWisePGSQLPlusStrictRLS project. Apply them to any new Supabase project before enabling
+  backup.
+- Email sign-in uses a deep link to `walletwise://settings` on native builds. The current local
+  web callback `http://localhost:8081/settings` and native callback are in this Supabase
+  project's Authentication → URL Configuration allowlist. Add each deployed web origin's
+  `/settings` callback there before enabling web sign-in on a hosted domain.
+- Backup and restore are user-triggered. Before upload, the client derives a 256-bit key from a
+  user-chosen passphrase with PBKDF2-HMAC-SHA256 (600,000 iterations) and encrypts the serialized
+  wallet using AES-256-GCM. Supabase stores only the encrypted envelope and metadata; the
+  passphrase is never sent. Keep the passphrase somewhere safe: it cannot be reset by WalletWise,
+  and losing it makes the cloud backup unrecoverable. A locally cached key is kept in the native
+  OS secure store to allow updates on that device. The web preview uses AsyncStorage for local
+  wallet data and holds the unlocked backup key only in memory.
+- The local wallet is stored in SQLCipher-backed SQLite on native builds, with its key in
+  Expo SecureStore. The old AsyncStorage Zustand record is migrated on first native load and
+  removed after copying. On web, the app currently uses browser AsyncStorage, which is not
+  encrypted at rest; use a native build for private local storage. Back up before uninstalling
+  or clearing local app/browser data if you need recovery.
+
 ## Updating
 
 - Server code or data changed: push (Option A) or `npx vercel@latest deploy --prod` (Option B).

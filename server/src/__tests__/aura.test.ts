@@ -56,7 +56,7 @@ describe('tools', () => {
   it('exposes the core tools with JSON schemas', () => {
     // A subset check, so branches that append tools do not all edit this list.
     const names = TOOL_DEFINITIONS.map((t) => t.name);
-    for (const name of ['get_best_card', 'get_card_updates', 'get_points_value', 'get_user_wallet', 'plan_trip', 'search_card_knowledge', 'show_app_screen']) {
+    for (const name of ['get_best_card', 'get_card_updates', 'get_points_value', 'check_redemption', 'get_user_wallet', 'plan_trip', 'search_card_knowledge', 'show_app_screen']) {
       assert.ok(names.includes(name), name);
     }
     assert.equal(new Set(names).size, names.length);
@@ -67,7 +67,8 @@ describe('tools', () => {
     const out = JSON.parse(await runTool('get_best_card', JSON.stringify({ category: 'DINING', amount: 1500, merchant: 'Swiggy', online: true }), ctx()));
     assert.equal(out.ok, true);
     assert.equal(out.ranking[0].cardId, 'hdfc-swiggy');
-    assert.equal(out.ranking[0].rupees_back, 150);
+    assert.equal(out.ranking[0].estimated_reward_value_inr, 150);
+    assert.equal(out.ranking[0].net_value_inr, 150);
   });
 
   it('returns structured errors instead of throwing', async () => {
@@ -82,15 +83,28 @@ describe('tools', () => {
   it('get_points_value and get_card_updates work for a named card', async () => {
     const value = JSON.parse(await runTool('get_points_value', JSON.stringify({ cardId: 'Infinia' }), ctx()));
     assert.equal(value.cards[0].cardId, 'hdfc-infinia');
-    assert.equal(value.cards[0].points, 20000);
+    assert.equal(value.cards[0].balance, 20000);
     const updates = JSON.parse(await runTool('get_card_updates', JSON.stringify({ cardId: 'hdfc-infinia' }), ctx()));
     assert.equal(updates.cards[0].cardId, 'hdfc-infinia');
+  });
+
+  it('checks net quote value after all listed costs', async () => {
+    const result = JSON.parse(await runTool('check_redemption', JSON.stringify({
+      cardId: 'Infinia', pointsRequired: 10000, cashPriceAvoidedRs: 12000, taxesRs: 500, feesRs: 100, surchargesRs: 50, source: 'Airline quote', verifiedAt: '2026-11-04',
+    }), ctx()));
+    assert.equal(result.ok, true);
+    assert.equal(result.quote.netValueRs, 11350);
+    assert.equal(result.quote.netRupeesPerPoint, 1.135);
+    assert.equal(result.quote.source, 'Airline quote');
+    assert.equal(result.quote.verifiedAt, '2026-11-04');
   });
 
   it('plan_trip sets the Trip Planner button', async () => {
     const c = ctx();
     const out = JSON.parse(await runTool('plan_trip', JSON.stringify({ destination: 'Goa', spend: 6500 }), c));
     assert.equal(out.ok, true);
+    assert.equal('covered_by_points_inr' in out, false);
+    assert.ok(Array.isArray(out.separate_airline_route_estimates));
     assert.deepEqual(c.cta, { label: 'Open Trip Planner', route: '/trip-planner', params: { fare: '6500' } });
   });
 

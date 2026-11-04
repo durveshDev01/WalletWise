@@ -20,12 +20,68 @@ export type RedemptionRoute = {
   cap: string | null;
   minTransfer: string | null;
   notes: string[];
+  /** Source for the card's earning/transfer rule. */
+  ruleSource: string | null;
+  ruleVerifiedAt: string | null;
+  /** Point valuation is often an estimate even when the transfer ratio is issuer-published. */
+  valuationSource: string;
+  valuationVerifiedAt: string | null;
+  estimated: boolean;
 };
+
+export type RedemptionQuote = {
+  pointsRequired: number;
+  cashPriceAvoidedRs: number;
+  taxesRs: number;
+  feesRs: number;
+  surchargesRs: number;
+  source?: string;
+  verifiedAt?: string;
+};
+
+export type RedemptionValue = {
+  pointsRequired: number;
+  grossValueRs: number;
+  costsRs: number;
+  netValueRs: number;
+  netRupeesPerPoint: number;
+  returnPct: number | null;
+  source: string | null;
+  verifiedAt: string | null;
+};
+
+/** Exact quote arithmetic. Costs must be entered by the user; unknown costs are never silently treated as zero. */
+export function calculateRedemptionValue(quote: RedemptionQuote, eligibleSpendRs?: number): RedemptionValue | null {
+  const { pointsRequired, cashPriceAvoidedRs } = quote;
+  const costs = quote.taxesRs + quote.feesRs + quote.surchargesRs;
+  if (![pointsRequired, cashPriceAvoidedRs, costs].every(Number.isFinite) || pointsRequired <= 0 || cashPriceAvoidedRs < 0 || costs < 0) return null;
+  const netValueRs = cashPriceAvoidedRs - costs;
+  return {
+    pointsRequired,
+    grossValueRs: Math.round(cashPriceAvoidedRs * 100) / 100,
+    costsRs: Math.round(costs * 100) / 100,
+    netValueRs: Math.round(netValueRs * 100) / 100,
+    netRupeesPerPoint: Math.round((netValueRs / pointsRequired) * 10000) / 10000,
+    returnPct: eligibleSpendRs != null && eligibleSpendRs > 0
+      ? Math.round((netValueRs / eligibleSpendRs) * 10000) / 100
+      : null,
+    source: quote.source?.trim() || null,
+    verifiedAt: quote.verifiedAt ?? null,
+  };
+}
 
 function edgeConfidence(edge: TransferEdge, partnerConf: Confidence): Confidence {
   if (edge.confidence === 'UNVERIFIED' || edge.confidence === 'LOW' || partnerConf === 'LOW') return 'LOW';
   if (edge.confidence === 'MEDIUM' || partnerConf === 'MEDIUM') return 'MEDIUM';
   return 'HIGH';
+}
+
+function staleConfidence(confidence: Confidence, verifiedAt: string | null): Confidence {
+  if (!verifiedAt || !/^\d{4}-\d{2}-\d{2}$/.test(verifiedAt)) return confidence === 'HIGH' ? 'MEDIUM' : confidence;
+  const ageDays = (Date.now() - Date.parse(`${verifiedAt}T00:00:00Z`)) / 86_400_000;
+  if (!Number.isFinite(ageDays) || ageDays > 365) return 'LOW';
+  if (ageDays > 180 && confidence === 'HIGH') return 'MEDIUM';
+  return confidence;
 }
 
 /**
@@ -71,15 +127,22 @@ function computeRoutes(catalog: Catalog, card: Card): RedemptionRoute[] {
     ratio: 1,
     rupeesPerPoint: safeRupeesPerPoint(card),
     rupeesPerPointCeiling: safeRupeesPerPoint(card),
-    confidence: 'HIGH',
+    confidence: card.programme ? 'MEDIUM' : 'HIGH',
     speed: null,
     cap: null,
     minTransfer: null,
     notes: [],
+    ruleSource: card.source ?? card.url ?? null,
+    ruleVerifiedAt: card.verifiedAt ?? card.lastChanged ?? null,
+    valuationSource: card.programme ? 'WalletWise point-value estimate; see research/credit-card-knowledge-base.md' : (card.source ?? card.url ?? 'Card reward data'),
+    valuationVerifiedAt: card.programme ? null : card.verifiedAt ?? card.lastChanged ?? null,
+    estimated: !!card.programme,
   };
   const routes: RedemptionRoute[] = [cash];
   const nodeId = card.programme?.id;
-  if (!nodeId || isCashback) return routes;
+  if (!nodeId || isCashback) {
+    return routes.map((route) => ({ ...route, confidence: staleConfidence(route.confidence, route.ruleVerifiedAt) }));
+  }
 
   const node = catalog.nodes.get(nodeId);
   // Co-branded cards earn the partner currency directly.
@@ -98,6 +161,11 @@ function computeRoutes(catalog: Catalog, card: Card): RedemptionRoute[] {
       cap: null,
       minTransfer: null,
       notes: pv.note ? [pv.note] : [],
+      ruleSource: card.source ?? card.url ?? null,
+      ruleVerifiedAt: node.verifiedAt ?? card.verifiedAt ?? card.lastChanged ?? null,
+      valuationSource: 'WalletWise partner-value estimate; see research/credit-card-knowledge-base.md',
+      valuationVerifiedAt: null,
+      estimated: true,
     });
   }
 
@@ -124,10 +192,17 @@ function computeRoutes(catalog: Catalog, card: Card): RedemptionRoute[] {
       cap: edge.cap,
       minTransfer: edge.minTransfer,
       notes,
+      ruleSource: edge.source,
+      ruleVerifiedAt: edge.verifiedAt,
+      valuationSource: 'WalletWise partner-value estimate; see research/credit-card-knowledge-base.md',
+      valuationVerifiedAt: null,
+      estimated: true,
     });
   }
 
-  return routes.sort((a, b) => b.rupeesPerPoint - a.rupeesPerPoint);
+  return routes
+    .map((route) => ({ ...route, confidence: staleConfidence(route.confidence, route.ruleVerifiedAt) }))
+    .sort((a, b) => b.rupeesPerPoint - a.rupeesPerPoint);
 }
 
 function formatRatio(r: number): string {

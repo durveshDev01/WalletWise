@@ -24,7 +24,7 @@ const RewardRow = React.memo(function RewardRow({ card, onOpen }: { card: CardDa
     <Pressable
       onPress={() => onOpen(card.id)}
       accessibilityRole="button"
-      accessibilityLabel={`${card.bankName} ${card.cardName}, ${card.points.toLocaleString('en-IN')} points, worth ${value}`}
+      accessibilityLabel={`${card.bankName} ${card.cardName}, ${card.points.toLocaleString('en-IN')} ${card.currencyName}, worth ${value}`}
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}
     >
       <BankBadge issuer={issuer} />
@@ -37,7 +37,7 @@ const RewardRow = React.memo(function RewardRow({ card, onOpen }: { card: CardDa
         </Text>
       </View>
       <View style={styles.values}>
-        <Text style={theme.text.title}>{card.points.toLocaleString('en-IN')}</Text>
+          <Text style={theme.text.title}>{card.points.toLocaleString('en-IN')} {card.currencyName}</Text>
         <Text style={[theme.text.caption, styles.rupees]}>{value}</Text>
       </View>
     </Pressable>
@@ -59,7 +59,7 @@ export function RewardsList({ cards, onOpenCard, onViewAll }: Props) {
         onAction={onViewAll}
       />
       <Text style={[theme.text.body, styles.total]}>
-        Total ≈ <Text style={styles.totalValue}>{inr(total)}</Text> at the default redemption value
+        Separate programme balances: <Text style={styles.totalValue}>≈ {inr(total)}</Text> in default-route INR equivalents (not pooled for a single redemption)
       </Text>
       <FlatList
         data={sorted.slice(0, VISIBLE)}

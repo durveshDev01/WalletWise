@@ -195,9 +195,11 @@ export type PurchaseResult = {
   forexCost: number;
   /** safeValue minus forexCost. */
   netValue: number;
-  /** Ranking score: netValue adjusted for devaluation risk on points cards. */
+  /** Ranking score in net rupees after explicit transaction costs. */
   score: number;
   effectiveRatePct: number;
+  /** Estimated earning return from this spend at the selected/default point value. */
+  estimatedReturnPct: number;
   /** Points or miles credited (rupees for cashback cards). */
   pointsEarned: number;
   rewardUnit: RewardUnit;
@@ -205,6 +207,9 @@ export type PurchaseResult = {
   rowIndex: number;
   usesPortal: boolean;
   confidence: Confidence;
+  source: string | null;
+  verifiedAt: string | null;
+  assumptions: string[];
   reason: string;
   warnings: string[];
   /** Reward counted against each capped row (same keys as CapUsage). */
