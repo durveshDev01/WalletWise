@@ -143,4 +143,12 @@ describe('monthSummary', () => {
     assert.deepEqual(s.cards, []);
     assert.deepEqual(s.caps, []);
   });
+
+  it('counts non-credit payment modes in spending totals but never awards card rewards', () => {
+    const list = [spend({ amount: 250, category: 'DINING', cardId: '', date: '2026-10-07', paymentMode: 'UPI' })];
+    const summary = monthSummary(catalog, list, holdings, {}, '2026-10');
+    assert.equal(summary.total, 250);
+    assert.equal(summary.unknownCardSpend, 250);
+    assert.equal(summary.cards.length, 0);
+  });
 });

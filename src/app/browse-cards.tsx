@@ -7,7 +7,7 @@ import { Chips, inr, LinkButton } from '../components/money/MoneyUi';
 import { catalog, DATA_ATTRIBUTION } from '../data/catalog';
 import { browseCards, CARD_FILTERS } from '../engine';
 import type { BrowseRow } from '../engine';
-import { useCardStore } from '../store/useCardStore';
+import { isSampleHolding, useCardStore } from '../store/useCardStore';
 import { theme } from '../theme';
 
 const feeLabel = (r: BrowseRow) => {
@@ -26,7 +26,6 @@ export default function BrowseCardsScreen() {
   const profile = useCardStore((s) => s.profile);
   const profileSaved = useCardStore((s) => s.profileSaved);
   const holdings = useCardStore((s) => s.holdings);
-  const isDemo = useCardStore((s) => s.isDemo);
 
   const [query, setQuery] = useState('');
   const [filters, setFilters] = useState<string[]>([]);
@@ -36,7 +35,7 @@ export default function BrowseCardsScreen() {
     () => browseCards(catalog, { query: deferredQuery, filterKeys: filters, profile: profileSaved ? profile : null }),
     [deferredQuery, filters, profile, profileSaved],
   );
-  const owned = new Set(isDemo ? [] : holdings.map((h) => h.catalogId));
+  const owned = new Set(holdings.filter((holding) => !isSampleHolding(holding)).map((h) => h.catalogId));
   const toggle = (key: string) => setFilters((f) => (f.includes(key) ? f.filter((k) => k !== key) : [...f, key]));
   const hints = CARD_FILTERS.filter((f) => filters.includes(f.key)).map((f) => f.hint);
 

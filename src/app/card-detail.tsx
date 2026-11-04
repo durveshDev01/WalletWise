@@ -332,6 +332,8 @@ export default function CardDetailScreen() {
     setEditing(true);
   };
   const saveEdit = () => {
+    if (!/^\d+$/.test(pointsText.trim())) { Alert.alert('Enter points', 'Enter the current points or cashback balance. Enter 0 if you do not know it yet.'); return; }
+    if ([statementDayText, dueDayText].some((day) => day.trim() && !parseBillDay(day))) { Alert.alert('Check bill day', 'Statement and due days must be whole numbers from 1 to 31.'); return; }
     updateHolding(card.id, { points: Number(pointsText.replace(/[^0-9]/g, '')) || 0, lastFour: lastFourText.replace(/[^0-9]/g, '').slice(-4), statementDay: parseBillDay(statementDayText), dueDay: parseBillDay(dueDayText) });
     setEditing(false);
   };

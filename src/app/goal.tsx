@@ -23,14 +23,18 @@ export default function GoalScreen() {
   const profileSaved = useCardStore((s) => s.profileSaved);
   const addGoal = useCardStore((s) => s.addGoal);
   const removeGoal = useCardStore((s) => s.removeGoal);
+  const updateGoal = useCardStore((s) => s.updateGoal);
 
   const [adding, setAdding] = useState(goals.length === 0);
   const [name, setName] = useState('');
   const [target, setTarget] = useState('');
   const [picked, setPicked] = useState<string[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const save = () => {
-    addGoal({ name: name.trim() || 'My goal', targetRs: toNumber(target), holdingIds: picked });
+    const data = { name: name.trim() || 'My goal', targetRs: toNumber(target), holdingIds: picked };
+    if (editingId) updateGoal(editingId, data); else addGoal(data);
+    setEditingId(null);
     setName('');
     setTarget('');
     setPicked([]);
@@ -58,6 +62,7 @@ export default function GoalScreen() {
           <Panel key={g.id} tone={p.shortfallRs === 0 ? 'good' : 'gold'}>
             <View style={styles.goalTop}>
               <Text style={styles.goalName}>{g.name}</Text>
+              <Pressable onPress={() => { setEditingId(g.id); setName(g.name); setTarget(String(g.targetRs)); setPicked(g.holdingIds.filter((id) => holdings.some((h) => h.id === id))); setAdding(true); }} accessibilityRole="button"><Text style={styles.remove}>Edit</Text></Pressable>
               <Pressable onPress={() => confirmRemove(g)} accessibilityRole="button" accessibilityLabel={`Remove goal ${g.name}`} hitSlop={10}>
                 <Text style={styles.remove}>Remove</Text>
               </Pressable>
@@ -92,7 +97,7 @@ export default function GoalScreen() {
 
       {adding ? (
         <Panel>
-          <Text style={styles.goalName}>New goal</Text>
+          <Text style={styles.goalName}>{editingId ? 'Edit goal' : 'New goal'}</Text>
           <Label>WHAT ARE YOU SAVING FOR?</Label>
           <Chips options={IDEAS.map((i) => ({ value: i, label: i }))} value={name} onChange={setName} />
           <TextInput
@@ -106,7 +111,7 @@ export default function GoalScreen() {
           />
           <Label>HOW MUCH DOES IT COST?</Label>
           <MoneyInput value={target} onChangeText={setTarget} accessibilityLabel="Goal amount in rupees" />
-          <Label>WHICH CARDS&apos; POINTS COUNT? (NONE PICKED = ALL)</Label>
+          <Label>WHICH CARD BALANCES MAY BE COUNTED? (NONE PICKED = EACH CURRENT CARD SEPARATELY)</Label>
           {holdings.length > 0 ? (
             <Chips
               options={holdings.map((h) => ({ value: h.id, label: catalog.byId.get(h.catalogId)?.name ?? h.cardName }))}
@@ -116,7 +121,7 @@ export default function GoalScreen() {
           ) : (
             <Body>Add a card to your wallet first.</Body>
           )}
-          <PrimaryButton label={toNumber(target) > 0 ? 'Save goal' : 'Enter the amount first'} onPress={save} disabled={!(toNumber(target) > 0)} />
+          <PrimaryButton label={toNumber(target) > 0 ? (editingId ? 'Save changes' : 'Save goal') : 'Enter the amount first'} onPress={save} disabled={!(toNumber(target) > 0)} />
         </Panel>
       ) : (
         <PrimaryButton label="Add a goal" onPress={() => setAdding(true)} />

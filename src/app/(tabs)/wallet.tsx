@@ -227,6 +227,7 @@ function StackedCard({
 export default function WalletScreen() {
   const cards = useCardStore((state) => state.cards);
   const isDemo = useCardStore((state) => state.isDemo);
+  const removeSampleCards = useCardStore((state) => state.removeSampleCards);
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -324,10 +325,12 @@ export default function WalletScreen() {
         </View>
 
         {isDemo && (
-          <Pressable style={styles.demoBanner} onPress={() => router.push('/add-card')}>
-            <Text style={styles.demoTitle}>These are sample cards</Text>
-            <Text style={styles.demoText}>Add your own card and its points balance to get real answers. Tap to add →</Text>
-          </Pressable>
+          <View style={styles.demoBanner}>
+            <Text style={styles.demoTitle}>Sample cards are included</Text>
+            <Text style={styles.demoText}>They remain alongside cards you add, as a comparison set. Remove them any time below.</Text>
+            <Pressable onPress={() => router.push('/add-card')} accessibilityRole="button"><Text style={styles.demoTitle}>Add a card →</Text></Pressable>
+            <Pressable onPress={removeSampleCards} accessibilityRole="button" accessibilityLabel="Remove sample cards"><Text style={styles.demoText}>Remove sample cards</Text></Pressable>
+          </View>
         )}
         {cards.length === 0 && (
           <Pressable style={styles.demoBanner} onPress={() => router.push('/add-card')}>

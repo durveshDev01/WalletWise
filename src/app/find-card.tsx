@@ -8,7 +8,7 @@ import { CardArt } from '../components/CardArt';
 import { catalog, DATA_ATTRIBUTION } from '../data/catalog';
 import { FIRST_CARD_MAX_FEE, recommendCards, recommendFirstCard } from '../engine';
 import type { Card, Category, Experience, FirstCardPlan, PortfolioAdvice, RepaymentHabit, UserProfile } from '../engine';
-import { useCardStore } from '../store/useCardStore';
+import { isSampleHolding, useCardStore } from '../store/useCardStore';
 import { colors, typography } from '../theme';
 
 // The spend questions, in the order a beginner thinks about their month.
@@ -80,7 +80,8 @@ export default function FindCardScreen() {
   const [firstCard, setFirstCard] = useState<FirstCardPlan | null>(null);
 
   // A card counts as added once it is in the user's own wallet (not the sample cards).
-  const inWallet = (catalogId: string) => !isDemo && holdings.some((h) => h.catalogId === catalogId);
+  const realHoldings = holdings.filter((holding) => !isSampleHolding(holding));
+  const inWallet = (catalogId: string) => realHoldings.some((h) => h.catalogId === catalogId);
 
   const monthlyTotal = useMemo(() => Object.values(spend).reduce((a, v) => a + toNumber(v), 0), [spend]);
   // The first-card questions appear for people without a card, or who say they have no credit history.
@@ -101,7 +102,7 @@ export default function FindCardScreen() {
     setFirstCard(newToCredit ? recommendFirstCard(catalog, next) : null);
     setAdvice(
       recommendCards(catalog, next, {
-        ownedIds: includeOwned ? holdings.map((h) => h.catalogId) : [],
+        ownedIds: includeOwned ? realHoldings.map((h) => h.catalogId) : [],
         maxNew: 2,
         candidateLimit: 20,
       }),
@@ -238,9 +239,9 @@ export default function FindCardScreen() {
         ))}
       </View>
 
-      {!isDemo && holdings.length > 0 && (
+      {realHoldings.length > 0 && (
         <Pressable onPress={() => setIncludeOwned((v) => !v)} style={styles.toggle} accessibilityRole="checkbox" accessibilityState={{ checked: includeOwned }}>
-          <Text style={styles.choiceText}>{includeOwned ? '☑' : '☐'} Keep my current {holdings.length} cards and find what to add</Text>
+          <Text style={styles.choiceText}>{includeOwned ? '☑' : '☐'} Keep my {realHoldings.length} real cards and find what to add</Text>
         </Pressable>
       )}
 
