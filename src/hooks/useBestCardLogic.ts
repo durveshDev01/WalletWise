@@ -31,7 +31,7 @@ export type PermissionState = 'checking' | 'granted' | 'denied' | 'services-off'
 export type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 
 /** Search radii offered on screen, in km. 5 km is the default. */
-export const RADIUS_OPTIONS = [1, 2, 5] as const;
+export const RADIUS_OPTIONS = [1, 2, 5, 10] as const;
 export type RadiusKm = (typeof RADIUS_OPTIONS)[number];
 
 /** Ignore GPS jitter: only a move of this many km re-runs the nearby search. */
@@ -267,3 +267,4 @@ export function useBestCardLogic() {
     hasMapboxKey: HAS_MAPBOX_TOKEN,
   };
 }
+

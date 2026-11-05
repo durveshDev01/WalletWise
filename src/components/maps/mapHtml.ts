@@ -29,14 +29,38 @@ const css = (topPx: number) => `
     display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; }
   .ww-marker.selected { width: 42px; height: 42px; border-radius: 21px; border-color: #d4af37; background: #2a2414; font-size: 20px; }
   .ww-user { width: 16px; height: 16px; border-radius: 8px; background: #4da3ff; border: 3px solid #ffffff; box-shadow: 0 0 0 6px rgba(77,163,255,0.25); }
-  /* The search box covers the top of the map, the place sheet the bottom and the location
-     button the top right, so Mapbox's logo and attribution sit top left, just below the
-     search box, where they always stay visible. */
-  .mapboxgl-ctrl-top-left, .mapboxgl-ctrl-top-right { top: ${topPx}px; }
-  /* Logo and attribution side by side, so they take one row. */
-  .mapboxgl-ctrl-top-left { display: flex; flex-direction: row; align-items: center; }
-  .mapboxgl-ctrl-attrib.mapboxgl-compact { background: rgba(20,22,26,0.85); }
-  .mapboxgl-ctrl-attrib a { color: #c9c9c9; }
+  /* Controls sit below search bar, scaled down to prevent mobile screen takeover. */
+  .mapboxgl-ctrl-top-left {
+    top: ${topPx + 6}px !important;
+    left: 8px !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 4px !important;
+    transform: scale(0.72) !important;
+    transform-origin: top left !important;
+    pointer-events: auto !important;
+    z-index: 10 !important;
+  }
+  .mapboxgl-ctrl-top-right {
+    top: ${topPx + 6}px !important;
+  }
+  .mapboxgl-ctrl-logo {
+    margin: 0 !important;
+    opacity: 0.85 !important;
+  }
+  .mapboxgl-ctrl-attrib.mapboxgl-compact {
+    background: rgba(18,20,24,0.85) !important;
+    border: 1px solid rgba(255,255,255,0.12) !important;
+    border-radius: 12px !important;
+    max-width: 200px !important;
+    max-height: 24px !important;
+    overflow: hidden !important;
+  }
+  .mapboxgl-ctrl-attrib a {
+    color: #c9c9c9 !important;
+    font-size: 10px !important;
+  }
 `;
 
 /** Full HTML for the map page. The token is a public Mapbox token (pk.), as Mapbox intends for apps. */
@@ -99,42 +123,58 @@ export function mapHtml(token: string, camera: MapCamera, controlsTopPx: number)
     var keep = {};
     state.markers.forEach(function (m) {
       keep[m.id] = true;
-      var entry = markers[m.id];
-      if (!entry) {
+      var current = markers[m.id];
+      if (!current) {
         var el = document.createElement('div');
-        el.setAttribute('role', 'button');
-        el.addEventListener('click', function (e) { e.stopPropagation(); post({ type: 'marker', id: m.id }); });
-        entry = markers[m.id] = { el: el, marker: new mapboxgl.Marker({ element: el }).setLngLat([m.lon, m.lat]).addTo(map) };
+        el.className = 'ww-marker' + (m.selected ? ' selected' : '');
+        el.textContent = m.emoji;
+        el.title = m.label;
+        el.addEventListener('click', function (ev) { ev.stopPropagation(); post({ type: 'marker', id: m.id }); });
+        var marker = new mapboxgl.Marker({ element: el }).setLngLat([m.lon, m.lat]).addTo(map);
+        markers[m.id] = { marker: marker, el: el, selected: m.selected };
+      } else {
+        if (current.selected !== m.selected) {
+          current.selected = m.selected;
+          current.el.className = 'ww-marker' + (m.selected ? ' selected' : '');
+        }
       }
-      // classList, not className: Mapbox positions markers with its own class on the same element.
-      entry.el.classList.add('ww-marker');
-      entry.el.classList.toggle('selected', m.selected);
-      entry.el.textContent = m.emoji;
-      entry.el.setAttribute('aria-label', m.label);
-      entry.el.style.zIndex = m.selected ? '2' : '1';
-      entry.marker.setLngLat([m.lon, m.lat]);
     });
-    Object.keys(markers).forEach(function (id) { if (!keep[id]) { markers[id].marker.remove(); delete markers[id]; } });
+    Object.keys(markers).forEach(function (id) {
+      if (!keep[id]) { markers[id].marker.remove(); delete markers[id]; }
+    });
   }
 
   map.on('load', function () {
-    map.addSource('radius', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-    map.addLayer({ id: 'radius-fill', type: 'fill', source: 'radius', paint: { 'fill-color': '#d4af37', 'fill-opacity': 0.08 } });
-    map.addLayer({ id: 'radius-line', type: 'line', source: 'radius', paint: { 'line-color': '#d4af37', 'line-opacity': 0.5, 'line-width': 1.5 } });
     loaded = true;
+    map.addSource('radius', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    map.addLayer({
+      id: 'radius-fill',
+      type: 'fill',
+      source: 'radius',
+      paint: { 'fill-color': '#d4af37', 'fill-opacity': 0.05 }
+    });
+    map.addLayer({
+      id: 'radius-line',
+      type: 'line',
+      source: 'radius',
+      paint: { 'line-color': '#d4af37', 'line-width': 1.5, 'line-dasharray': [3, 2], 'line-opacity': 0.6 }
+    });
     if (pending) { apply(pending); pending = null; }
     post({ type: 'ready' });
   });
-  map.on('error', function (e) { post({ type: 'error', message: (e && e.error && e.error.message) || 'Map error' }); });
-  map.on('moveend', function () { var c = map.getCenter(); post({ type: 'moveend', lat: c.lat, lon: c.lng }); });
+
+  map.on('moveend', function () {
+    var c = map.getCenter();
+    post({ type: 'moveend', lat: Number(c.lat.toFixed(5)), lon: Number(c.lng.toFixed(5)) });
+  });
   map.on('click', function () { post({ type: 'press' }); });
 
-  // Called by the app through injectJavaScript.
   window.WW = {
     state: function (s) { apply(s); },
-    flyTo: function (lat, lon, zoom, ms) { map.flyTo({ center: [lon, lat], zoom: zoom, duration: ms, essential: true }); }
+    flyTo: function (lat, lon, zoom, durationMs) {
+      map.flyTo({ center: [lon, lat], zoom: zoom, duration: durationMs || 700, essential: true });
+    }
   };
-  post({ type: 'boot' });
 })();
 </script></body></html>`;
 }
