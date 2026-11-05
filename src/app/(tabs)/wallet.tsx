@@ -455,7 +455,7 @@ export default function WalletScreen() {
               onPress={() => router.push('/find-card')}
               accessibilityRole="button"
             >
-              <Text style={styles.findCardLinkText}>Don't have a card yet? Find your best card →</Text>
+              <Text style={styles.findCardLinkText}>{"Don't have a card yet? Find your best card →"}</Text>
             </Pressable>
           </View>
         ) : (
