@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "WalletWise",
-    "slug": "WalletWise",
+    "slug": "wallet-wise",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -57,9 +57,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "21c0f29f-1228-4051-9dde-5d240bb766a2"
+        "projectId": "cac36463-7470-4e2b-bf91-f3db514b8ca3"
       }
     },
-    "owner": "sanchit-borikar"
+    "owner": "swaraj31s-team"
   }
 }
