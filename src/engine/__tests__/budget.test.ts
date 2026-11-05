@@ -2,7 +2,7 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
 
-import { currentMonth, monthSummary, spendsInMonth } from '../budget';
+import { currentMonth, monthSummary, spendsInMonth, spendTrends } from '../budget';
 import type { Spend } from '../budget';
 import { buildCatalog } from '../catalog';
 import type { Card, RewardRow } from '../types';
@@ -150,5 +150,27 @@ describe('monthSummary', () => {
     assert.equal(summary.total, 250);
     assert.equal(summary.unknownCardSpend, 250);
     assert.equal(summary.cards.length, 0);
+  });
+});
+
+describe('spendTrends', () => {
+  it('computes average monthly spend and identifies top category', () => {
+    const list = [
+      spend({ amount: 10000, category: 'GROCERY', cardId: 'h1', date: '2026-09-10' }),
+      spend({ amount: 5000, category: 'DINING', cardId: 'h1', date: '2026-09-15' }),
+      spend({ amount: 12000, category: 'GROCERY', cardId: 'h1', date: '2026-10-05' }),
+      spend({ amount: 3000, category: 'ONLINE_SHOPPING', cardId: 'h2', date: '2026-10-12' }),
+    ];
+    const trends = spendTrends(list, '2026-10');
+    assert.ok(trends !== null);
+    assert.equal(trends.monthsSampled, 2);
+    assert.equal(trends.averageMonthlySpend, 15000);
+    assert.equal(trends.topCategory?.category, 'GROCERY');
+    assert.equal(trends.momChangePct, 0);
+    assert.ok(trends.assumptions.length >= 2);
+  });
+
+  it('returns null when there are no logged spends', () => {
+    assert.equal(spendTrends([], '2026-10'), null);
   });
 });

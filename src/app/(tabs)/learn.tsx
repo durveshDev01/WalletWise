@@ -194,17 +194,18 @@ const PointsCalculator = () => {
 };
 
 // ==========================================
-// 6. INTERACTIVE QUIZ
+// ==========================================
+// 6. INTERACTIVE QUIZ DECK (Learning Flow)
 // ==========================================
 const QUIZ_BANK = [
   {
-    question: "You are spending ₹5,000 on fuel. Which card?",
+    question: "You are spending ₹5,000 on fuel. Which card should you use?",
     options: ["HDFC Infinia", "SBI BPCL Octane"],
     correctIdx: 1,
     rationale: "Octane gives about 6.25% value back on BPCL fuel (capped monthly), while Infinia lists no fuel reward rate."
   },
   {
-    question: "Which card offers unlimited international lounge access?",
+    question: "Which card offers unlimited international lounge access for cardholders and add-ons?",
     options: ["Regalia Gold", "HDFC Infinia"],
     correctIdx: 1,
     rationale: "Infinia provides unlimited Priority Pass lounge visits globally for both primary and add-on members."
@@ -213,69 +214,147 @@ const QUIZ_BANK = [
     question: "A ₹10,000 card balance is left unpaid at about 3.75% a month. What does one month cost?",
     options: ["About ₹375 plus GST", "Nothing if you pay the minimum"],
     correctIdx: 0,
-    rationale: "Interest runs on the unpaid balance, and paying only the minimum also removes the interest-free period on new spends until the bill is cleared. Always pay the total amount due."
+    rationale: "Interest runs on the unpaid balance, and paying only the minimum also removes the interest-free grace period on all new spends until cleared. Always pay the full statement balance."
   },
   {
-    question: "Which card's points give the highest value for Marriott Bonvoy transfers?",
+    question: "Which card's points give the highest direct value for Marriott Bonvoy hotel transfers?",
     options: ["HDFC Diners Club Black", "Marriott Bonvoy HDFC"],
     correctIdx: 1,
-    rationale: "The Marriott Bonvoy card earns Bonvoy points directly, often yielding better hotel value than standard conversion rates."
+    rationale: "The Marriott Bonvoy card earns Bonvoy points directly, yielding better hotel room value than standard 1:1 or 2:1 bank transfer ratios."
+  },
+  {
+    question: "Can cashback rewards earned on SBI Cashback be transferred to airline air miles?",
+    options: ["Yes, to Air India and Singapore KrisFlyer", "No, cashback is credited as a statement credit only"],
+    correctIdx: 1,
+    rationale: "Cashback-only cards credit your monthly statement directly. They have no frequent-flyer transfer partners."
   }
 ];
 
 const CardQuiz = () => {
-  const [answered, setAnswered] = useState(false);
-  // A random question, picked once when the quiz first shows.
-  const [quizItem] = useState(() => QUIZ_BANK[Math.floor(Math.random() * QUIZ_BANK.length)]);
+  const [currentIdx, setCurrentIdx] = useState(0);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  const [score, setScore] = useState(0);
+  const [showSummary, setShowSummary] = useState(false);
+
   const ringScale = useSharedValue(0);
 
-  
+  const question = QUIZ_BANK[currentIdx];
+  const isAnswered = selectedIdx !== null;
+  const isCorrect = selectedIdx === question.correctIdx;
+
   const handleAnswer = (idx: number) => {
-    if (answered) return;
+    if (isAnswered) return;
     setSelectedIdx(idx);
-    setAnswered(true);
+    if (idx === question.correctIdx) {
+      setScore((s) => s + 1);
+    }
     ringScale.value = withSpring(1);
+  };
+
+  const handleNext = () => {
+    ringScale.value = 0;
+    setSelectedIdx(null);
+    if (currentIdx + 1 < QUIZ_BANK.length) {
+      setCurrentIdx((i) => i + 1);
+    } else {
+      setShowSummary(true);
+    }
+  };
+
+  const handleRestart = () => {
+    setCurrentIdx(0);
+    setSelectedIdx(null);
+    setScore(0);
+    setShowSummary(false);
+    ringScale.value = 0;
   };
 
   const ringStyle = useAnimatedStyle(() => ({
     transform: [{ scale: ringScale.value }],
-    opacity: interpolate(ringScale.value, [0, 1], [0, 1])
+    opacity: interpolate(ringScale.value, [0, 1], [0, 1]),
   }));
 
-  const isCorrect = selectedIdx === quizItem.correctIdx;
+  if (showSummary) {
+    const pct = Math.round((score / QUIZ_BANK.length) * 100);
+    const badge = pct >= 80 ? '🏆 Credit Card Master' : pct >= 60 ? '🎓 Smart Cardholder' : '📖 Credit Explorer';
+    return (
+      <View style={[styles.toolCard, { width: '100%', marginBottom: 16 }]}>
+        <Text style={styles.toolIcon}>🏅</Text>
+        <Text style={styles.toolTitle}>Quiz Completed!</Text>
+        <Text style={styles.summaryBadge}>{badge}</Text>
+        <Text style={styles.toolSub}>
+          You scored {score} out of {QUIZ_BANK.length} ({pct}%).
+        </Text>
+        <View style={styles.summaryTakeaway}>
+          <Text style={styles.summaryTakeawayTitle}>Key Takeaway:</Text>
+          <Text style={styles.summaryTakeawayText}>
+            Never carry an unpaid balance (it cancels your grace period), match category spend to dedicated multiplier cards, and keep cashback separate from air miles.
+          </Text>
+        </View>
+        <Pressable style={styles.quizNextBtn} onPress={handleRestart}>
+          <Text style={styles.quizNextBtnText}>Retake Quiz ↺</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.toolCard, { width: '100%', marginBottom: 16 }]}>
-      <Text style={styles.toolIcon}>?</Text>
-      <Text style={styles.toolTitle}>Card Quiz</Text>
-      <Text style={styles.toolSub}>{quizItem.question}</Text>
-      
-      {!answered ? (
+      <View style={styles.quizDeckHeader}>
+        <Text style={styles.toolIcon}>?</Text>
+        <Text style={styles.quizDeckCounter}>Question {currentIdx + 1} of {QUIZ_BANK.length}</Text>
+      </View>
+      <View style={styles.quizProgressBar}>
+        <View style={[styles.quizProgressFill, { width: `${((currentIdx + 1) / QUIZ_BANK.length) * 100}%` }]} />
+      </View>
+
+      <Text style={[styles.toolSub, { marginTop: 12 }]}>{question.question}</Text>
+
+      {!isAnswered ? (
         <View style={styles.quizOptions}>
-          {quizItem.options.map((opt, i) => (
-             <Pressable key={i} style={styles.quizBtn} onPress={() => handleAnswer(i)}>
-               <Text style={styles.quizBtnText}>{opt}</Text>
-             </Pressable>
+          {question.options.map((opt, i) => (
+            <Pressable key={i} style={styles.quizBtn} onPress={() => handleAnswer(i)}>
+              <Text style={styles.quizBtnText}>{opt}</Text>
+            </Pressable>
           ))}
         </View>
       ) : (
-        <View style={[styles.quizResult, { borderColor: isCorrect ? 'rgba(84, 199, 138, 0.2)' : 'rgba(201, 65, 46, 0.2)', backgroundColor: isCorrect ? 'rgba(84, 199, 138, 0.05)' : 'rgba(201, 65, 46, 0.05)' }]}>
-          <Animated.View style={[styles.quizRing, ringStyle, { backgroundColor: isCorrect ? '#54C78A' : colors.accent.danger }]}>
-            <Text style={styles.quizResultIcon}>{isCorrect ? '✓' : '✗'}</Text>
-          </Animated.View>
-          <View style={{ flex: 1, marginLeft: 16 }}>
-             <Text style={[styles.quizResultTitle, { color: isCorrect ? '#54C78A' : colors.accent.danger }]}>
-               {isCorrect ? `${quizItem.options[quizItem.correctIdx]} is correct!` : `Incorrect.`}
-             </Text>
-             <Text style={styles.quizResultDesc}>{quizItem.rationale}</Text>
+        <View style={{ gap: 12 }}>
+          <View
+            style={[
+              styles.quizResult,
+              {
+                borderColor: isCorrect ? 'rgba(84, 199, 138, 0.2)' : 'rgba(201, 65, 46, 0.2)',
+                backgroundColor: isCorrect ? 'rgba(84, 199, 138, 0.05)' : 'rgba(201, 65, 46, 0.05)',
+              },
+            ]}
+          >
+            <Animated.View
+              style={[
+                styles.quizRing,
+                ringStyle,
+                { backgroundColor: isCorrect ? '#54C78A' : colors.accent.danger },
+              ]}
+            >
+              <Text style={styles.quizResultIcon}>{isCorrect ? '✓' : '✗'}</Text>
+            </Animated.View>
+            <View style={{ flex: 1, marginLeft: 16 }}>
+              <Text style={[styles.quizResultTitle, { color: isCorrect ? '#54C78A' : colors.accent.danger }]}>
+                {isCorrect ? `${question.options[question.correctIdx]} is correct!` : 'Incorrect.'}
+              </Text>
+              <Text style={styles.quizResultDesc}>{question.rationale}</Text>
+            </View>
           </View>
+          <Pressable style={styles.quizNextBtn} onPress={handleNext}>
+            <Text style={styles.quizNextBtnText}>
+              {currentIdx + 1 < QUIZ_BANK.length ? 'Next Question →' : 'View Results →'}
+            </Text>
+          </Pressable>
         </View>
       )}
     </View>
   );
 };
-
 const InteractiveTools = () => {
   return (
     <View style={styles.section}>
@@ -556,6 +635,27 @@ const styles = StyleSheet.create({
   calcResultText: { color: colors.accent.goldStart, fontSize: 14, fontWeight: '600' },
   calcResultValue: { color: '#FFF', fontSize: 18, fontWeight: '700' },
 
+  settingsBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#161616',
+    borderWidth: 1,
+    borderColor: '#262626',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  settingsIcon: { fontSize: 18, color: colors.accent.goldStart },
+  quizDeckHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  quizDeckCounter: { fontFamily: typography.fontFamily, color: colors.accent.goldStart, fontSize: 12, fontWeight: '700' },
+  quizProgressBar: { height: 4, backgroundColor: '#202020', borderRadius: 2, marginTop: 8, overflow: 'hidden' },
+  quizProgressFill: { height: '100%', backgroundColor: colors.accent.goldStart, borderRadius: 2 },
+  quizNextBtn: { backgroundColor: 'rgba(245, 208, 111, 0.15)', borderWidth: 1, borderColor: colors.accent.goldStart, paddingVertical: 12, borderRadius: 10, alignItems: 'center', marginTop: 4 },
+  quizNextBtnText: { fontFamily: typography.fontFamily, color: colors.accent.goldStart, fontSize: 14, fontWeight: '700' },
+  summaryBadge: { fontFamily: typography.fontFamily, color: colors.accent.goldStart, fontSize: 16, fontWeight: '700', marginTop: 4 },
+  summaryTakeaway: { backgroundColor: '#141414', borderRadius: 10, borderWidth: 1, borderColor: '#222', padding: 12, marginVertical: 12 },
+  summaryTakeawayTitle: { fontFamily: typography.fontFamily, color: '#F0F0F0', fontSize: 13, fontWeight: '600' },
+  summaryTakeawayText: { fontFamily: typography.fontFamily, color: '#999', fontSize: 12, lineHeight: 17, marginTop: 4 },
   quizOptions: { gap: 12 },
   quizBtn: { backgroundColor: '#000', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#222' },
   quizBtnText: { color: colors.text.primary, fontSize: 15, fontWeight: '500', textAlign: 'center' },

@@ -165,3 +165,74 @@ export function monthSummary(
     unknownCardSpend,
   };
 }
+
+export type SpendTrend = {
+  averageMonthlySpend: number;
+  monthsSampled: number;
+  topCategory: { category: Category; label: string; spent: number } | null;
+  momChangePct: number | null;
+  projectedMonthTotal: number;
+  assumptions: string[];
+};
+
+/**
+ * Transparent, deterministic spending forecast and category trends based purely
+ * on the user's logged ledger history. No external tracking or unexplainable models.
+ */
+export function spendTrends(spends: Spend[], currentMonthStr: string): SpendTrend | null {
+  if (spends.length === 0) return null;
+
+  const byMonth = new Map<string, number>();
+  const byCat = new Map<Category, number>();
+
+  for (const s of spends) {
+    const m = monthOf(s.date);
+    byMonth.set(m, (byMonth.get(m) ?? 0) + s.amount);
+    byCat.set(s.category, (byCat.get(s.category) ?? 0) + s.amount);
+  }
+
+  const months = [...byMonth.keys()].sort();
+  const monthTotals = months.map((m) => byMonth.get(m) ?? 0);
+  const totalAll = monthTotals.reduce((a, b) => a + b, 0);
+  const averageMonthlySpend = Math.round(totalAll / Math.max(1, months.length));
+
+  let topCatKey: Category | null = null;
+  let topCatAmount = 0;
+  for (const [cat, amt] of byCat.entries()) {
+    if (amt > topCatAmount) {
+      topCatAmount = amt;
+      topCatKey = cat;
+    }
+  }
+
+  let momChangePct: number | null = null;
+  if (months.length >= 2) {
+    const last = byMonth.get(months[months.length - 1]) ?? 0;
+    const prev = byMonth.get(months[months.length - 2]) ?? 0;
+    if (prev > 0) {
+      momChangePct = Math.round(((last - prev) / prev) * 100);
+    }
+  }
+
+  const [y, m] = currentMonthStr.split('-').map(Number);
+  const todayDate = new Date();
+  const isThisMonth = todayDate.getFullYear() === y && todayDate.getMonth() + 1 === m;
+  const dayOfMonth = isThisMonth ? todayDate.getDate() : 15;
+  const currentTotal = byMonth.get(currentMonthStr) ?? 0;
+  const daysInCurMonth = new Date(y, m, 0).getDate();
+  const projectedMonthTotal = dayOfMonth > 0 ? Math.round((currentTotal / dayOfMonth) * daysInCurMonth) : currentTotal;
+
+  const assumptions = [
+    `Based on ${spends.length} logged transaction${spends.length > 1 ? 's' : ''} across ${months.length} month${months.length > 1 ? 's' : ''}.`,
+    'Calculated deterministically from your ledger; personal transactions never leave your device.',
+  ];
+
+  return {
+    averageMonthlySpend,
+    monthsSampled: months.length,
+    topCategory: topCatKey ? { category: topCatKey, label: CATEGORY_LABELS[topCatKey], spent: topCatAmount } : null,
+    momChangePct,
+    projectedMonthTotal,
+    assumptions,
+  };
+}

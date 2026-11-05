@@ -46,7 +46,7 @@ const CategoryChip = React.memo(function CategoryChip({
   );
 });
 
-/** "Which card should I use?": pick a spend type and amount, see the best card and what it earns. */
+/** "Which card should I use?": pick a spend type and amount, see the best card, why it wins, and what it earns. */
 export function CardCalculator({ cards, onCompareNearby }: Props) {
   const [category, setCategory] = useState<MerchantCategory>('Dining');
   const [amount, setAmount] = useState(5000);
@@ -114,6 +114,11 @@ export function CardCalculator({ cards, onCompareNearby }: Props) {
               <Text style={theme.text.body}>{units}</Text>
             </View>
             <Text style={theme.text.caption}>Estimated net value on {inr(amount)} spend · {best.confidence.toLowerCase()} confidence</Text>
+            {!!best.winningMargin && (
+              <View style={styles.marginBox}>
+                <Text style={styles.marginText}>🏆 {best.winningMargin.explanation}</Text>
+              </View>
+            )}
             {!!best.verifiedAt && <Text style={theme.text.caption}>Reward data checked {best.verifiedAt}{best.source ? ` · ${best.source}` : ''}</Text>}
             {!!best.warnings[0] && <Text style={[theme.text.caption, styles.warning]}>{best.warnings[0]}</Text>}
           </>
@@ -181,6 +186,22 @@ const styles = StyleSheet.create({
   cardName: { marginTop: theme.spacing.xs },
   rewardRow: { flexDirection: 'row', alignItems: 'baseline', gap: theme.spacing.sm },
   reward: { color: theme.colors.gold, fontSize: theme.fontSize.hero - theme.spacing.sm, lineHeight: theme.fontSize.hero },
+  marginBox: {
+    backgroundColor: 'rgba(245,208,111,0.08)',
+    borderColor: 'rgba(245,208,111,0.25)',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    marginVertical: 4,
+  },
+  marginText: {
+    fontFamily: theme.fontFamily,
+    color: theme.colors.gold,
+    fontSize: 12,
+    fontWeight: '600',
+    lineHeight: 16,
+  },
   warning: { color: theme.colors.warning },
   secondaryCta: {
     marginTop: theme.spacing.md,

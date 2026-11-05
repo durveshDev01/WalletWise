@@ -1,4 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
+import { catalog } from '../../data/catalog';
+import { redemptionRoutes } from '../../engine';
 import { StyleSheet, Text, View, Pressable, Dimensions } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -66,24 +68,78 @@ function ExpiryBanner({ cards }: { cards: CardData[] }) {
 }
 
 // ─────────────────────────────────────────────
-// Points Value Card (Black + Gold Theme)
+// Points Value Card (Black + Gold Theme) — Programme-specific redemptions
 // ─────────────────────────────────────────────
-function PointsValueCard({ totalMin, totalMax }: { totalMin: number; totalMax: number }) {
+function PointsValueCard({ cards, totalMin, totalMax }: { cards: CardData[]; totalMin: number; totalMax: number }) {
   const router = useRouter();
+
+  const programmes = useMemo(() => {
+    return cards
+      .filter((c) => c.points > 0 || c.lowValue > 0)
+      .map((c) => {
+        const catCard = catalog.byId.get(c.catalogId);
+        const routes = catCard ? redemptionRoutes(catalog, catCard) : [];
+        const airlineRoutes = routes.filter((r) => r.kind === 'TRANSFER' && r.partnerKind === 'AIRLINE');
+        const hasAirline = airlineRoutes.length > 0;
+        return {
+          card: c,
+          hasAirline,
+          airlinePartners: airlineRoutes.map((r) => r.label),
+          routesCount: routes.length,
+          isCashback:
+            c.currencyName.toLowerCase().includes('cashback') ||
+            (!hasAirline && routes.every((r) => r.kind === 'CASH')),
+        };
+      });
+  }, [cards]);
+
   return (
     <View style={styles.infoCard}>
       <Text style={styles.infoLabel}>WHAT ARE YOUR REWARDS WORTH?</Text>
       <Text style={[styles.infoBigNum, { marginTop: 8, color: colors.accent.goldStart }]}>
         ₹{totalMin.toLocaleString('en-IN')}{totalMax > totalMin ? ` – ₹${totalMax.toLocaleString('en-IN')}` : ''}
       </Text>
-      <Text style={styles.infoSubtext}>Estimated INR equivalent across separate reward programmes; balances are not pooled.</Text>
+      <Text style={styles.infoSubtext}>
+        Estimated INR equivalent separated by reward programme. Balances cannot be combined across different banks.
+      </Text>
+
+      {/* Programme Breakdown */}
+      {programmes.length > 0 && (
+        <View style={styles.programmeList}>
+          {programmes.map(({ card: c, hasAirline, airlinePartners, isCashback }) => (
+            <Pressable
+              key={c.id}
+              style={styles.programmeItem}
+              onPress={() => router.push({ pathname: '/card-detail', params: { id: c.id, tab: 'Redeem' } })}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.programmeCardName}>{c.bankName} {c.cardName}</Text>
+                <Text style={styles.programmeBalance}>
+                  {c.points.toLocaleString('en-IN')} {c.currencyName} ≈ ₹{c.lowValue.toLocaleString('en-IN')}{c.highValue > c.lowValue ? ` – ₹${c.highValue.toLocaleString('en-IN')}` : ''}
+                </Text>
+                {hasAirline ? (
+                  <Text style={styles.programmeDetail}>
+                    ✈ Eligible for {airlinePartners.length} airline partner{airlinePartners.length > 1 ? 's' : ''} ({airlinePartners.slice(0, 2).join(', ')}{airlinePartners.length > 2 ? '...' : ''})
+                  </Text>
+                ) : (
+                  <Text style={[styles.programmeDetail, { color: '#7E7E7E' }]}>
+                    💵 {isCashback ? 'Statement credit / cash only · No airline partners' : 'Voucher / merchandise only'}
+                  </Text>
+                )}
+              </View>
+              <Text style={styles.programmeArrow}>→</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
       <View style={styles.horizontalDivider} />
       <Pressable style={styles.infoRow} onPress={() => router.push('/trip-planner')}>
         <Text style={styles.infoIcon}>✈︎</Text>
         <View style={{ flex: 1 }}>
-          <Text style={styles.infoRowTitle}>Travel</Text>
+          <Text style={styles.infoRowTitle}>Plan Flight Redemption</Text>
           <Text style={styles.infoRowSub}>
-            {'Compare eligible airline transfer routes and check award prices, taxes and fees with the airline. Plan a trip →'}
+            Compare eligible airline transfer routes and check award availability with taxes. Open Trip Planner →
           </Text>
         </View>
       </Pressable>
@@ -319,9 +375,14 @@ export default function WalletScreen() {
               Points worth: <Text style={{ color: colors.accent.goldStart }}>₹{totalMin.toLocaleString('en-IN')} – ₹{totalMax.toLocaleString('en-IN')}</Text>
             </Text>
           </View>
-          <Pressable style={styles.plusButton} onPress={() => router.push('/add-card')}>
-            <Text style={styles.plusButtonText}>+</Text>
-          </Pressable>
+          <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+            <Pressable style={styles.plusButton} onPress={() => router.push('/settings')} accessibilityLabel="Settings">
+              <Text style={{ fontSize: 18, color: colors.accent.goldStart }}>⚙</Text>
+            </Pressable>
+            <Pressable style={styles.plusButton} onPress={() => router.push('/add-card')} accessibilityLabel="Add card">
+              <Text style={styles.plusButtonText}>+</Text>
+            </Pressable>
+          </View>
         </View>
 
         {isDemo && (
@@ -369,7 +430,7 @@ export default function WalletScreen() {
         {/* Rest of the Info (Below hint) */}
         <Text style={styles.sectionTitle}>Your reward balances</Text>
         <ExpiryBanner cards={cards} />
-        <PointsValueCard totalMin={totalMin} totalMax={totalMax} />
+        <PointsValueCard cards={cards} totalMin={totalMin} totalMax={totalMax} />
         <WalletMoneyLinks />
 
       </ScrollView>
@@ -521,6 +582,47 @@ const styles = StyleSheet.create({
   },
 
   // Info Cards (Transactions styling)
+  programmeList: {
+    marginTop: 14,
+    gap: 8,
+  },
+  programmeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#161616',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#242424',
+    padding: 12,
+    gap: 8,
+  },
+  programmeCardName: {
+    fontFamily: typography.fontFamily,
+    color: '#F0F0F0',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  programmeBalance: {
+    fontFamily: typography.fontFamily,
+    color: colors.accent.goldStart,
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  programmeDetail: {
+    fontFamily: typography.fontFamily,
+    color: '#9E9E9E',
+    fontSize: 11,
+    marginTop: 3,
+    lineHeight: 15,
+  },
+  programmeArrow: {
+    fontFamily: typography.fontFamily,
+    color: colors.accent.goldStart,
+    fontSize: 16,
+    fontWeight: '600',
+    paddingHorizontal: 4,
+  },
   infoCard: {
     backgroundColor: '#111111',
     borderRadius: 20,

@@ -7,7 +7,7 @@ import type { EnrichedPlace } from '../hooks/useBestCardLogic';
 import type { CardData } from '../store/useCardStore';
 import { colors, typography } from '../theme';
 import type { MerchantCategory } from '../utils/merchantClassifier';
-import { getRankedRecommendations } from '../utils/recommendationEngine';
+import { getCardIneligibilityReason, getRankedRecommendations } from '../utils/recommendationEngine';
 import { CardArt } from './CardArt';
 
 export type RankMode = 'Max Value' | 'Cashback';
@@ -27,7 +27,8 @@ type Props = {
 
 /**
  * Everything for one place: how much you will pay, how you pay, and every card in
- * the wallet ranked by what it earns there. Powered by the engine (src/engine).
+ * the wallet ranked by what it earns there. Explains the winning margin over runner-up
+ * and explicit ineligibility reasons. Powered by the shared engine (src/engine).
  */
 export function PlacePanel({ place, cards, mode, onClose }: Props) {
   const router = useRouter();
@@ -150,6 +151,14 @@ export function PlacePanel({ place, cards, mode, onClose }: Props) {
                 <Text style={styles.earnUnit}>{r.rewardUnit === 'CASHBACK' ? 'cashback' : unit}</Text>
               </View>
             </View>
+
+            {/* Winning Margin Explanation for Top Pick */}
+            {i === 0 && r.winningMargin && earns && (
+              <View style={styles.winningMarginBox}>
+                <Text style={styles.winningMarginText}>🏆 {r.winningMargin.explanation}</Text>
+              </View>
+            )}
+
             {r.rewardUnit !== 'CASHBACK' && earns && (
               <Text style={styles.detail}>
                 Default-route estimate {inr(r.estimatedValue)}
@@ -177,7 +186,7 @@ export function PlacePanel({ place, cards, mode, onClose }: Props) {
               <Text style={styles.cardName} numberOfLines={1}>
                 {c.bankName} {c.cardName}
               </Text>
-              <Text style={styles.notEligible}>{upi ? 'Cannot be used on UPI (only RuPay credit cards can)' : 'Not usable for this payment'}</Text>
+              <Text style={styles.notEligible}>{getCardIneligibilityReason(c, upi ? 'UPI' : 'CARD', category)}</Text>
             </View>
           </View>
         </View>
@@ -229,6 +238,23 @@ const styles = StyleSheet.create({
   earnBox: { alignItems: 'flex-end' },
   earnBig: { fontFamily: typography.fontFamily, color: colors.accent.goldStart, fontSize: 20, fontWeight: '700' },
   earnUnit: { fontFamily: typography.fontFamily, color: '#8A8A8A', fontSize: 11 },
+  winningMarginBox: {
+    backgroundColor: 'rgba(245,208,111,0.08)',
+    borderColor: 'rgba(245,208,111,0.25)',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginTop: 10,
+    marginLeft: 28,
+  },
+  winningMarginText: {
+    fontFamily: typography.fontFamily,
+    color: colors.accent.goldStart,
+    fontSize: 12,
+    fontWeight: '600',
+    lineHeight: 16,
+  },
   detail: { fontFamily: typography.fontFamily, color: '#B0B0B0', fontSize: 12, marginTop: 8, marginLeft: 28 },
   warning: { fontFamily: typography.fontFamily, color: '#C9A15A', fontSize: 12, marginTop: 6, marginLeft: 28, lineHeight: 17 },
   footnote: { fontFamily: typography.fontFamily, color: '#6F6F6F', fontSize: 11, lineHeight: 16, marginTop: 12 },

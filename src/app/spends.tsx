@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 
 import { Block, Button, Chip, Field, Heading, Label, Para, Screen, kitStyles } from '../components/screen/ScreenKit';
 import { catalog } from '../data/catalog';
-import { currentMonth, monthSummary, spendsInMonth } from '../engine/budget';
+import { currentMonth, monthSummary, spendsInMonth, spendTrends } from '../engine/budget';
 import { localIsoDate } from '../engine/billing';
 import type { Category } from '../engine';
 import { useCardStore } from '../store/useCardStore';
@@ -75,6 +75,7 @@ export default function SpendsScreen() {
     [spends, holdings, profile, month],
   );
   const recent = useMemo(() => spendsInMonth(spends, month).reverse().slice(0, 20), [spends, month]);
+  const trends = useMemo(() => spendTrends(spends, month), [spends, month]);
   const cardLabel = (id: string) => holdings.find((h) => h.id === id)?.label ?? 'Removed card';
 
   const value = Number(amount.replace(/[^0-9.]/g, ''));
@@ -229,6 +230,37 @@ export default function SpendsScreen() {
               {c.usedRs >= c.capRs && <Text style={theme.text.caption}>Cap reached: more spend here earns only the base rate this month.</Text>}
             </View>
           ))}
+        </Block>
+      )}
+
+      {trends && (
+        <Block>
+          <Label>Spend Insights & Forecast</Label>
+          <View style={styles.line}>
+            <View style={kitStyles.between}>
+              <Text style={theme.text.caption}>Projected this month</Text>
+              <Text style={[theme.text.body, kitStyles.gold]}>≈ {inr(trends.projectedMonthTotal)}</Text>
+            </View>
+            <View style={kitStyles.between}>
+              <Text style={theme.text.caption}>Historical monthly avg</Text>
+              <Text style={theme.text.body}>{inr(trends.averageMonthlySpend)}</Text>
+            </View>
+            {trends.topCategory && (
+              <View style={kitStyles.between}>
+                <Text style={theme.text.caption}>Top spending category</Text>
+                <Text style={theme.text.body}>{trends.topCategory.label} ({inr(trends.topCategory.spent)})</Text>
+              </View>
+            )}
+            {trends.momChangePct !== null && (
+              <View style={kitStyles.between}>
+                <Text style={theme.text.caption}>Month-over-month trend</Text>
+                <Text style={[theme.text.body, trends.momChangePct > 0 ? { color: '#E57373' } : { color: '#81C784' }]}>
+                  {trends.momChangePct > 0 ? `+${trends.momChangePct}%` : `${trends.momChangePct}%`}
+                </Text>
+              </View>
+            )}
+          </View>
+          <Para muted>{trends.assumptions[0]} {trends.assumptions[1]}</Para>
         </Block>
       )}
 

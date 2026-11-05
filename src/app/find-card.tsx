@@ -57,9 +57,15 @@ const feeLabel = (card: Card) =>
       : `Fee ${inr(card.annualFee)} + GST a year${card.feeWaiverSpend ? `, waived at ${inr(card.feeWaiverSpend)} spend` : ''}`;
 const toNumber = (s: string) => Number(s.replace(/[^0-9]/g, '')) || 0;
 
+type RunSnapshot = {
+  monthlyTotal: number;
+  topPick?: { id: string; name: string; gainPerYear: number };
+};
+
 /**
- * Find My Card: a few questions about spending, income and repayment, then the
- * engine's portfolio module picks the best one or two cards, or says none is worth it.
+ * Find My Card / Card Matcher:
+ * A guided recommendation flow matching spending, repayment habits, and UPI share
+ * against verified card terms to recommend the best 1-2 cards with explainable return deltas.
  */
 export default function FindCardScreen() {
   const router = useRouter();
@@ -74,6 +80,7 @@ export default function FindCardScreen() {
   const [experience, setExperience] = useState<Experience>(profile.experience);
   const [includeOwned, setIncludeOwned] = useState(!isDemo);
   const [advice, setAdvice] = useState<PortfolioAdvice | null>(null);
+  const [previousRun, setPreviousRun] = useState<RunSnapshot | null>(null);
   const [upiShare, setUpiShare] = useState(profile.upiShare ?? 0);
   const [hasCreditHistory, setHasCreditHistory] = useState<boolean | undefined>(profile.hasCreditHistory);
   const [incomeProof, setIncomeProof] = useState<boolean | undefined>(profile.incomeProof);
@@ -100,13 +107,21 @@ export default function FindCardScreen() {
     };
     setProfile(next);
     setFirstCard(newToCredit ? recommendFirstCard(catalog, next) : null);
-    setAdvice(
-      recommendCards(catalog, next, {
-        ownedIds: includeOwned ? realHoldings.map((h) => h.catalogId) : [],
-        maxNew: 2,
-        candidateLimit: 20,
-      }),
-    );
+    const newAdvice = recommendCards(catalog, next, {
+      ownedIds: includeOwned ? realHoldings.map((h) => h.catalogId) : [],
+      maxNew: 2,
+      candidateLimit: 20,
+    });
+
+    if (advice) {
+      const prevTop = advice.picks[0];
+      setPreviousRun({
+        monthlyTotal,
+        topPick: prevTop ? { id: prevTop.card.id, name: prevTop.card.name, gainPerYear: prevTop.gainPerYear } : undefined,
+      });
+    }
+
+    setAdvice(newAdvice);
   };
 
   return (
@@ -114,10 +129,17 @@ export default function FindCardScreen() {
       <Pressable onPress={() => router.back()} style={styles.back} accessibilityRole="button" accessibilityLabel="Back">
         <Text style={styles.backText}>← Back</Text>
       </Pressable>
-      <Text style={styles.title}>Find My Card</Text>
+
+      <View style={styles.badgeRow}>
+        <View style={styles.flowBadge}>
+          <Text style={styles.flowBadgeText}>RECOMMENDATION FLOW</Text>
+        </View>
+      </View>
+
+      <Text style={styles.title}>Find My Next Card</Text>
       <Text style={styles.sub}>
-        Tell us roughly what you spend in a month. We check all {catalog.cards.length} Indian cards and pick the best one or two after fees, using the spend you
-        already have. Sometimes the honest answer is that no card is worth it yet.
+        This is a recommendation tool, not card tracking. Share your monthly spending pattern and payment channels to see
+        which 1 or 2 Indian cards earn you the highest net rupees after fees. If no card justifies its cost, we tell you frankly.
       </Text>
 
       <Text style={styles.section}>MONTHLY SPENDING</Text>
@@ -249,6 +271,43 @@ export default function FindCardScreen() {
         <Text style={styles.primaryText}>{monthlyTotal === 0 ? 'Enter your spending first' : 'Find my best cards'}</Text>
       </Pressable>
 
+      {/* Before vs After Profile Impact Comparison */}
+      {previousRun && advice && (
+        <View style={styles.comparisonBox}>
+          <Text style={styles.comparisonTitle}>Profile Update: Before vs. After</Text>
+          <Text style={styles.comparisonSubtext}>Here is how your card recommendations shifted with your updated spend inputs:</Text>
+          <View style={styles.comparisonGrid}>
+            <View style={styles.comparisonCol}>
+              <Text style={styles.comparisonLabel}>PREVIOUS PROFILE</Text>
+              <Text style={styles.comparisonAmount}>{inr(previousRun.monthlyTotal)}/mo</Text>
+              <Text style={styles.comparisonCard}>{previousRun.topPick ? `${previousRun.topPick.name} (~${inr(previousRun.topPick.gainPerYear)}/yr)` : 'No card'}</Text>
+            </View>
+            <View style={styles.comparisonDivider} />
+            <View style={styles.comparisonCol}>
+              <Text style={styles.comparisonLabel}>UPDATED PROFILE</Text>
+              <Text style={styles.comparisonAmount}>{inr(monthlyTotal)}/mo</Text>
+              <Text style={styles.comparisonCard}>{advice.picks[0] ? `${advice.picks[0].card.name} (~${inr(advice.picks[0].gainPerYear)}/yr)` : 'No card'}</Text>
+            </View>
+          </View>
+          {previousRun.topPick && advice.picks[0] && (
+            <View style={styles.deltaBox}>
+              <Text style={styles.deltaText}>
+                Net annual return impact:{' '}
+                <Text style={{ fontWeight: '700', color: advice.picks[0].gainPerYear >= previousRun.topPick.gainPerYear ? '#54C78A' : '#E8A090' }}>
+                  {advice.picks[0].gainPerYear >= previousRun.topPick.gainPerYear ? '+' : ''}
+                  {inr(advice.picks[0].gainPerYear - previousRun.topPick.gainPerYear)} / year
+                </Text>
+              </Text>
+              {previousRun.topPick.id !== advice.picks[0].card.id && (
+                <Text style={styles.shiftExplanation}>
+                  Top recommendation shifted from {previousRun.topPick.name} to {advice.picks[0].card.name} based on your updated category weighting and payment channel.
+                </Text>
+              )}
+            </View>
+          )}
+        </View>
+      )}
+
       {firstCard && (
         <View style={{ marginTop: 28 }}>
           <Text style={styles.verdict}>Ways to get your first card</Text>
@@ -366,7 +425,24 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   back: { paddingVertical: 8 },
   backText: { fontFamily: typography.fontFamily, color: colors.accent.goldStart, fontSize: 15, fontWeight: '600' },
-  title: { fontFamily: typography.fontFamily, color: '#F5F5F5', fontSize: 30, fontWeight: '700', letterSpacing: -0.5, marginTop: 8 },
+  badgeRow: { marginTop: 6, marginBottom: 4 },
+  flowBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(245,208,111,0.12)',
+    borderColor: 'rgba(245,208,111,0.3)',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  flowBadgeText: {
+    fontFamily: typography.fontFamily,
+    color: colors.accent.goldStart,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+  },
+  title: { fontFamily: typography.fontFamily, color: '#F5F5F5', fontSize: 28, fontWeight: '700', letterSpacing: -0.5, marginTop: 4 },
   sub: { fontFamily: typography.fontFamily, color: '#9A9A9A', fontSize: 14, marginTop: 8, lineHeight: 20 },
   section: { fontFamily: typography.fontFamily, color: '#6F6F6F', fontSize: 11, fontWeight: '700', letterSpacing: 1, marginTop: 28, marginBottom: 10 },
   fieldRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#1A1A1A', gap: 12 },
@@ -384,6 +460,81 @@ const styles = StyleSheet.create({
   toggle: { marginTop: 20 },
   primary: { marginTop: 28, backgroundColor: colors.accent.goldStart, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
   primaryText: { fontFamily: typography.fontFamily, color: '#0A0A0A', fontSize: 16, fontWeight: '700' },
+  comparisonBox: {
+    backgroundColor: '#151515',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#2F2F2F',
+    padding: 16,
+    marginTop: 24,
+  },
+  comparisonTitle: {
+    fontFamily: typography.fontFamily,
+    color: '#F5F5F5',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  comparisonSubtext: {
+    fontFamily: typography.fontFamily,
+    color: '#8A8A8A',
+    fontSize: 12,
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  comparisonGrid: {
+    flexDirection: 'row',
+    backgroundColor: '#0D0D0D',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#222',
+    padding: 12,
+  },
+  comparisonCol: {
+    flex: 1,
+  },
+  comparisonDivider: {
+    width: 1,
+    backgroundColor: '#2A2A2A',
+    marginHorizontal: 12,
+  },
+  comparisonLabel: {
+    fontFamily: typography.fontFamily,
+    color: '#6F6F6F',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+  },
+  comparisonAmount: {
+    fontFamily: typography.fontFamily,
+    color: '#E5E5E5',
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  comparisonCard: {
+    fontFamily: typography.fontFamily,
+    color: colors.accent.goldStart,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  deltaBox: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#242424',
+  },
+  deltaText: {
+    fontFamily: typography.fontFamily,
+    color: '#CCCCCC',
+    fontSize: 13,
+  },
+  shiftExplanation: {
+    fontFamily: typography.fontFamily,
+    color: '#A0A0A0',
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 6,
+  },
   warningBox: { backgroundColor: 'rgba(201,65,46,0.1)', borderColor: 'rgba(201,65,46,0.4)', borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 10 },
   warningText: { fontFamily: typography.fontFamily, color: '#E8A090', fontSize: 13, lineHeight: 19 },
   verdict: { fontFamily: typography.fontFamily, color: '#F5F5F5', fontSize: 22, fontWeight: '700', marginTop: 8 },
