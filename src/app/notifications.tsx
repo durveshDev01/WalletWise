@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { catalog } from '../data/catalog';
-import { daysUntilDue, todayIso, walletAlerts } from '../engine';
+import { daysUntilDue, formatDueDate, ordinalDay, todayIso, upcomingDueDates, walletAlerts } from '../engine';
 import { useCardStore } from '../store/useCardStore';
 import { colors, typography } from '../theme';
 
@@ -28,12 +28,14 @@ export default function NotificationsScreen() {
       .filter((h) => h.dueDay != null && h.dueDay >= 1 && h.dueDay <= 31)
       .map((h) => {
         const days = daysUntilDue(h.dueDay!, now) ?? 0;
+        const [nextDue] = upcomingDueDates(h.dueDay!, now, 1);
         const cardData = cards.find((c) => c.id === h.id);
         const catalogCard = catalog.byId.get(h.catalogId);
         return {
           holdingId: h.id,
           name: cardData ? `${cardData.bankName} ${cardData.cardName}` : (catalogCard?.name ?? h.catalogId),
           dueDay: h.dueDay!,
+          dueDateFormatted: nextDue ? formatDueDate(nextDue, now) : `${ordinalDay(h.dueDay!)} of month`,
           daysLeft: days,
         };
       })
@@ -138,7 +140,7 @@ export default function NotificationsScreen() {
           >
             <View style={{ flex: 1 }}>
               <Text style={styles.billCardName}>{b.name}</Text>
-              <Text style={styles.billCardSub}>Due day {b.dueDay} of the month</Text>
+              <Text style={styles.billCardSub}>Due on {b.dueDateFormatted} · {ordinalDay(b.dueDay)} of month</Text>
             </View>
             <View style={styles.billDueBadge}>
               <Text style={[styles.billDueDays, b.daysLeft <= 3 && { color: colors.accent.danger }]}>

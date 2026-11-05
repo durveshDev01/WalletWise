@@ -9,6 +9,7 @@ import {
   daysInMonth,
   daysUntilDue,
   daysUntilExpiry,
+  formatDueDate,
   isValidBillDay,
   localIsoDate,
   ordinalDay,
@@ -138,6 +139,13 @@ describe('ordinalDay', () => {
     assert.deepEqual([1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 31].map(ordinalDay), [
       '1st', '2nd', '3rd', '4th', '11th', '12th', '13th', '21st', '22nd', '23rd', '31st',
     ]);
+  });
+});
+
+describe('formatDueDate', () => {
+  it('formats dates cleanly for bills', () => {
+    assert.equal(formatDueDate(day(2026, 11, 12), day(2026, 11, 5)), '12 Nov');
+    assert.equal(formatDueDate(day(2027, 1, 5), day(2026, 11, 5)), '5 Jan 2027');
   });
 });
 

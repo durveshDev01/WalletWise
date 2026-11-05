@@ -85,6 +85,14 @@ export function billReminders(dueDay: number, from: Date, monthsAhead = REMINDER
     .slice(0, monthsAhead * REMINDER_DAYS_BEFORE.length);
 }
 
+/** Formats a date for bill display, e.g. "12 Nov" or "5 Jan 2027". */
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
+export function formatDueDate(d: Date, from: Date = new Date()): string {
+  const dayNum = d.getDate();
+  const month = SHORT_MONTHS[d.getMonth()] ?? '';
+  return d.getFullYear() !== from.getFullYear() ? `${dayNum} ${month} ${d.getFullYear()}` : `${dayNum} ${month}`;
+}
+
 /** Local date as YYYY-MM-DD (used in notification ids). */
 export function localIsoDate(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
