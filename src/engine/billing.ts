@@ -97,3 +97,29 @@ export function ordinalDay(day: number): string {
   const suffix = tens >= 11 && tens <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[day % 10] ?? 'th';
   return `${day}${suffix}`;
 }
+
+/**
+ * Calculates remaining whole days until an ISO date (YYYY-MM-DD).
+ * Returns null if no valid date string, or whole days from `from` to the target date.
+ * If the target date has passed, returns 0.
+ */
+export function daysUntilExpiry(expiryDate: string | undefined | null, from: Date = new Date()): number | null {
+  if (!expiryDate || typeof expiryDate !== 'string') return null;
+  const parts = expiryDate.split('-').map(Number);
+  if (parts.length !== 3 || parts.some((p) => isNaN(p) || p <= 0)) return null;
+  const [year, month, dayNum] = parts;
+  const target = new Date(year, month - 1, dayNum);
+  if (isNaN(target.getTime())) return null;
+  const today = startOfDay(from);
+  const diffDays = Math.round((target.getTime() - today.getTime()) / 86_400_000);
+  return Math.max(0, diffDays);
+}
+
+/**
+ * Returns an ISO date string (YYYY-MM-DD) that is `days` days in the future from `from`.
+ */
+export function dateInDays(days: number, from: Date = new Date()): string {
+  const d = new Date(from.getFullYear(), from.getMonth(), from.getDate() + days);
+  return localIsoDate(d);
+}
+

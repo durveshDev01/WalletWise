@@ -5,8 +5,10 @@ import { describe, it } from 'node:test';
 import {
   billDateInMonth,
   billReminders,
+  dateInDays,
   daysInMonth,
   daysUntilDue,
+  daysUntilExpiry,
   isValidBillDay,
   localIsoDate,
   ordinalDay,
@@ -138,3 +140,25 @@ describe('ordinalDay', () => {
     ]);
   });
 });
+
+describe('daysUntilExpiry and dateInDays', () => {
+  it('counts days remaining until an expiry date', () => {
+    const from = day(2026, 11, 5);
+    assert.equal(daysUntilExpiry('2026-11-23', from), 18);
+    assert.equal(daysUntilExpiry('2026-11-06', from), 1);
+    assert.equal(daysUntilExpiry('2026-11-05', from), 0);
+    // past date returns 0
+    assert.equal(daysUntilExpiry('2026-10-31', from), 0);
+    // invalid string returns null
+    assert.equal(daysUntilExpiry('', from), null);
+    assert.equal(daysUntilExpiry(undefined, from), null);
+    assert.equal(daysUntilExpiry('not-a-date', from), null);
+  });
+
+  it('generates future ISO date given a day offset', () => {
+    const from = day(2026, 11, 5);
+    assert.equal(dateInDays(18, from), '2026-11-23');
+    assert.equal(dateInDays(0, from), '2026-11-05');
+  });
+});
+

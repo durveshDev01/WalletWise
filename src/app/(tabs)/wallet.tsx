@@ -37,13 +37,18 @@ const EXPANDED_SPACING = 85;       // Overlapping spread distance
 // ─────────────────────────────────────────────
 function ExpiryBanner({ cards }: { cards: CardData[] }) {
   const router = useRouter();
-  const expiringCard = cards.find(c => c.expiryDays && c.expiryDays <= 30);
+  const expiringCard = cards.find(c => c.expiryDays != null && c.expiryDays <= 30);
   if (!expiringCard) return null;
+
+  const isToday = expiringCard.expiryDays === 0;
+  const isTomorrow = expiringCard.expiryDays === 1;
 
   return (
     <View style={[styles.infoCard, { borderColor: 'rgba(201, 65, 46, 0.3)' }]}>
       <View style={styles.expiryBody}>
-        <Text style={[styles.infoLabel, { color: colors.accent.danger }]}>{expiringCard.currencyName.toUpperCase()} EXPIRING SOON</Text>
+        <Text style={[styles.infoLabel, { color: colors.accent.danger }]}>
+          {isToday ? `${expiringCard.currencyName.toUpperCase()} EXPIRING TODAY` : `${expiringCard.currencyName.toUpperCase()} EXPIRING SOON`}
+        </Text>
         <View style={styles.expiryStats}>
           <View style={styles.expiryStat}>
             <Text style={styles.infoBigNum}>{expiringCard.points.toLocaleString('en-IN')}</Text>
@@ -51,8 +56,8 @@ function ExpiryBanner({ cards }: { cards: CardData[] }) {
           </View>
           <View style={styles.expiryDivider} />
           <View style={styles.expiryStat}>
-            <Text style={styles.infoBigNum}>{expiringCard.expiryDays}</Text>
-            <Text style={styles.infoUnit}>days left</Text>
+            <Text style={styles.infoBigNum}>{isToday ? 'Today' : isTomorrow ? '1' : expiringCard.expiryDays}</Text>
+            <Text style={styles.infoUnit}>{isToday ? 'expires' : isTomorrow ? 'day left' : 'days left'}</Text>
           </View>
         </View>
         <Text style={styles.infoSubtext}>{expiringCard.bankName} {expiringCard.cardName}</Text>

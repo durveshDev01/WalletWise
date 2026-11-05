@@ -4,6 +4,8 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { catalog } from '../data/catalog';
 import {
   CATEGORY_LABELS,
+  dateInDays,
+  daysUntilExpiry,
   devaluationRisk,
   pointsValue,
   redemptionRoutes,
@@ -22,6 +24,9 @@ export type CardData = {
   cardName: string;
   lastFour: string;
   points: number;
+  /** Target expiration date (YYYY-MM-DD) if configured. */
+  expiryDate?: string;
+  /** Dynamically computed remaining days until expiryDate. */
   expiryDays?: number;
   lowValue: number;
   highValue: number;
@@ -56,6 +61,9 @@ export type Holding = {
   cardName: string;
   lastFour: string;
   points: number;
+  /** Target expiration date in YYYY-MM-DD. */
+  expiryDate?: string;
+  /** Optional legacy/manual days input. */
   expiryDays?: number;
   /** Day of the month the statement is made (1 to 31). Optional, set by the user. */
   statementDay?: number;
@@ -128,6 +136,12 @@ export function toCardData(h: Holding): CardData {
   const annual = walletValue(catalog, [card], DEFAULT_PROFILE);
   const { risk } = devaluationRisk(catalog, card.id);
 
+  let expiryDate = h.expiryDate;
+  if (!expiryDate && h.id === '2' && isSampleHolding(h)) {
+    expiryDate = dateInDays(18);
+  }
+  const expiryDays = expiryDate ? daysUntilExpiry(expiryDate) ?? undefined : h.expiryDays;
+
   return {
     id: h.id,
     catalogId: card.id,
@@ -135,7 +149,8 @@ export function toCardData(h: Holding): CardData {
     cardName: h.cardName,
     lastFour: h.lastFour,
     points: h.points,
-    expiryDays: h.expiryDays,
+    expiryDate,
+    expiryDays,
     lowValue: value.low,
     highValue: value.high,
     valueRoute: value.bestRoute.label,
@@ -174,7 +189,7 @@ export function toCardData(h: Holding): CardData {
 // Demo wallet. Point balances are sample values until the user enters their own.
 const DEMO_HOLDINGS: Holding[] = [
   { id: '1', catalogId: 'hdfc-infinia', bankName: 'HDFC BANK', cardName: 'Infinia', lastFour: '4920', points: 24000 },
-  { id: '2', catalogId: 'sbi-bpcl-octane', bankName: 'SBI CARD', cardName: 'BPCL Octane', lastFour: '8821', points: 4200, expiryDays: 18 },
+  { id: '2', catalogId: 'sbi-bpcl-octane', bankName: 'SBI CARD', cardName: 'BPCL Octane', lastFour: '8821', points: 4200, expiryDate: dateInDays(18) },
   { id: '3', catalogId: 'amex-platinum-travel', bankName: 'AMERICAN EXPRESS', cardName: 'Platinum Travel', lastFour: '1234', points: 15000 },
   { id: '4', catalogId: 'hdfc-regalia-gold', bankName: 'HDFC BANK', cardName: 'Regalia Gold', lastFour: '5678', points: 32000 },
   { id: '5', catalogId: 'hdfc-marriott-bonvoy', bankName: 'HDFC BANK', cardName: 'Marriott Bonvoy', lastFour: '9012', points: 18000 },
@@ -195,10 +210,10 @@ interface CardStore {
   /** Set once the user has answered the Find My Card questions. */
   profileSaved: boolean;
   setProfile: (profile: UserProfile) => void;
-  addCard: (catalogId: string, lastFour: string, points: number, billDays?: Pick<Holding, 'statementDay' | 'dueDay'>) => void;
+  addCard: (catalogId: string, lastFour: string, points: number, billDays?: Pick<Holding, 'statementDay' | 'dueDay' | 'expiryDate' | 'expiryDays'>) => void;
   updateHolding: (
     id: string,
-    changes: Partial<Pick<Holding, 'lastFour' | 'points' | 'expiryDays' | 'statementDay' | 'dueDay'>>,
+    changes: Partial<Pick<Holding, 'lastFour' | 'points' | 'expiryDays' | 'expiryDate' | 'statementDay' | 'dueDay'>>,
   ) => void;
   removeHolding: (id: string) => void;
   clearDemo: () => void;
@@ -264,13 +279,24 @@ export const useCardStore = create<CardStore>()(
       setProfile: (profile) => set({ profile, profileSaved: true }),
       addCard: (catalogId, lastFour, points, billDays) =>
         set((s) => {
+          let extra = { ...billDays };
+          if (extra.expiryDays != null && extra.expiryDays > 0 && !extra.expiryDate) {
+            extra.expiryDate = dateInDays(extra.expiryDays);
+          }
           // Keep samples visible until the user explicitly removes them.
-          const holdings = [...s.holdings, { ...newHolding(catalogId, lastFour, points), ...billDays }];
+          const holdings = [...s.holdings, { ...newHolding(catalogId, lastFour, points), ...extra }];
           return { holdings, cards: derive(holdings), isDemo: s.isDemo };
         }),
       updateHolding: (id, changes) =>
         set((s) => {
-          const holdings = s.holdings.map((h) => (h.id === id ? { ...h, ...changes } : h));
+          const holdings = s.holdings.map((h) => {
+            if (h.id !== id) return h;
+            const updated = { ...h, ...changes };
+            if (updated.expiryDays != null && updated.expiryDays > 0 && !changes.expiryDate) {
+              updated.expiryDate = dateInDays(updated.expiryDays);
+            }
+            return updated;
+          });
           return { holdings, cards: derive(holdings) };
         }),
       removeHolding: (id) =>

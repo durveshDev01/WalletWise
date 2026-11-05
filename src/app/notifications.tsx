@@ -153,19 +153,28 @@ export default function NotificationsScreen() {
       {expiringCards.length > 0 && (
         <>
           <Text style={styles.sectionHeader}>POINTS EXPIRY ALERTS</Text>
-          {expiringCards.map((c) => (
-            <Pressable
-              key={c.id}
-              style={[styles.alertCard, { borderColor: 'rgba(201,65,46,0.3)' }]}
-              onPress={() => router.push({ pathname: '/card-detail', params: { id: c.id, tab: 'Redeem' } })}
-            >
-              <Text style={styles.alertCardName}>{c.bankName} {c.cardName}</Text>
-              <Text style={[styles.alertSummary, { color: colors.accent.danger, marginTop: 4 }]}>
-                {c.points.toLocaleString('en-IN')} {c.currencyName} expiring in {c.expiryDays} days!
-              </Text>
-              <Text style={styles.alertDate}>Tap to redeem before expiration →</Text>
-            </Pressable>
-          ))}
+          {expiringCards.map((c) => {
+            const isToday = c.expiryDays === 0;
+            const isTomorrow = c.expiryDays === 1;
+            const expiryText = isToday
+              ? 'expiring today!'
+              : isTomorrow
+                ? 'expiring tomorrow!'
+                : `expiring in ${c.expiryDays} days!`;
+            return (
+              <Pressable
+                key={c.id}
+                style={[styles.alertCard, { borderColor: 'rgba(201,65,46,0.3)' }]}
+                onPress={() => router.push({ pathname: '/card-detail', params: { id: c.id, tab: 'Redeem' } })}
+              >
+                <Text style={styles.alertCardName}>{c.bankName} {c.cardName}</Text>
+                <Text style={[styles.alertSummary, { color: colors.accent.danger, marginTop: 4 }]}>
+                  {c.points.toLocaleString('en-IN')} {c.currencyName} {expiryText}
+                </Text>
+                <Text style={styles.alertDate}>Tap to redeem before expiration →</Text>
+              </Pressable>
+            );
+          })}
         </>
       )}
 
