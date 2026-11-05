@@ -233,7 +233,7 @@ export default function SpendsScreen() {
         </Block>
       )}
 
-      {trends && (
+      {trends ? (
         <Block>
           <Label>Spend Insights & Forecast</Label>
           <View style={styles.line}>
@@ -262,7 +262,14 @@ export default function SpendsScreen() {
           </View>
           <Para muted>{trends.assumptions[0]} {trends.assumptions[1]}</Para>
         </Block>
-      )}
+      ) : spends.length > 0 ? (
+        <Block>
+          <Label>Spend Insights & Forecast</Label>
+          <Para muted>
+            📊 Log transactions across two calendar months to unlock historical averages, category trends, and monthly forecasting.
+          </Para>
+        </Block>
+      ) : null}
 
       <Block tone="gold">
         <Para strong>Never spend more just to reach a milestone or a fee waiver.</Para>

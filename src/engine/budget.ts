@@ -192,6 +192,7 @@ export function spendTrends(spends: Spend[], currentMonthStr: string): SpendTren
   }
 
   const months = [...byMonth.keys()].sort();
+  if (months.length < 2) return null;
   const monthTotals = months.map((m) => byMonth.get(m) ?? 0);
   const totalAll = monthTotals.reduce((a, b) => a + b, 0);
   const averageMonthlySpend = Math.round(totalAll / Math.max(1, months.length));
