@@ -85,15 +85,30 @@ function PointsValueCard({ cards, totalMin, totalMax }: { cards: CardData[]; tot
         const catCard = catalog.byId.get(c.catalogId);
         const routes = catCard ? redemptionRoutes(catalog, catCard) : [];
         const airlineRoutes = routes.filter((r) => r.kind === 'TRANSFER' && r.partnerKind === 'AIRLINE');
-        const hasAirline = airlineRoutes.length > 0;
+        const hotelRoutes = routes.filter((r) => r.kind === 'TRANSFER' && r.partnerKind === 'HOTEL');
+        const cashRoute = routes.find((r) => r.kind === 'CASH');
+        const isCashback = c.currencyName.toLowerCase().includes('cashback') || (routes.length === 1 && routes[0].kind === 'CASH');
+
+        const avenues: string[] = [];
+        if (airlineRoutes.length > 0) {
+          const names = airlineRoutes.slice(0, 2).map((r) => r.label.replace(/^Transfer to /, ''));
+          avenues.push(`✈️ Flights (${airlineRoutes.length} airline${airlineRoutes.length > 1 ? 's' : ''}: ${names.join(', ')}${airlineRoutes.length > 2 ? '…' : ''})`);
+        }
+        if (hotelRoutes.length > 0) {
+          const names = hotelRoutes.slice(0, 2).map((r) => r.label.replace(/^Transfer to /, ''));
+          avenues.push(`🏨 Hotels (${hotelRoutes.length} partner${hotelRoutes.length > 1 ? 's' : ''}: ${names.join(', ')}${hotelRoutes.length > 2 ? '…' : ''})`);
+        }
+        if (cashRoute || isCashback) {
+          avenues.push(`💵 Statement credit / Cash`);
+        }
+        if (!isCashback) {
+          avenues.push(`🛍️ Brand vouchers & rewards portal`);
+        }
+
         return {
           card: c,
-          hasAirline,
-          airlinePartners: airlineRoutes.map((r) => r.label),
+          avenues,
           routesCount: routes.length,
-          isCashback:
-            c.currencyName.toLowerCase().includes('cashback') ||
-            (!hasAirline && routes.every((r) => r.kind === 'CASH')),
         };
       });
   }, [cards]);
@@ -111,7 +126,7 @@ function PointsValueCard({ cards, totalMin, totalMax }: { cards: CardData[]; tot
       {/* Programme Breakdown */}
       {programmes.length > 0 && (
         <View style={styles.programmeList}>
-          {programmes.map(({ card: c, hasAirline, airlinePartners, isCashback }) => (
+          {programmes.map(({ card: c, avenues }) => (
             <Pressable
               key={c.id}
               style={styles.programmeItem}
@@ -122,15 +137,13 @@ function PointsValueCard({ cards, totalMin, totalMax }: { cards: CardData[]; tot
                 <Text style={styles.programmeBalance}>
                   {c.points.toLocaleString('en-IN')} {c.currencyName} ≈ ₹{c.lowValue.toLocaleString('en-IN')}{c.highValue > c.lowValue ? ` – ₹${c.highValue.toLocaleString('en-IN')}` : ''}
                 </Text>
-                {hasAirline ? (
-                  <Text style={styles.programmeDetail}>
-                    ✈ Eligible for {airlinePartners.length} airline partner{airlinePartners.length > 1 ? 's' : ''} ({airlinePartners.slice(0, 2).join(', ')}{airlinePartners.length > 2 ? '...' : ''})
-                  </Text>
-                ) : (
-                  <Text style={[styles.programmeDetail, { color: '#7E7E7E' }]}>
-                    💵 {isCashback ? 'Statement credit / cash only · No airline partners' : 'Voucher / merchandise only'}
-                  </Text>
-                )}
+                <View style={{ marginTop: 4, gap: 2 }}>
+                  {avenues.map((av, idx) => (
+                    <Text key={idx} style={styles.programmeDetail}>
+                      {av}
+                    </Text>
+                  ))}
+                </View>
               </View>
               <Text style={styles.programmeArrow}>→</Text>
             </Pressable>
@@ -139,15 +152,36 @@ function PointsValueCard({ cards, totalMin, totalMax }: { cards: CardData[]; tot
       )}
 
       <View style={styles.horizontalDivider} />
+
       <Pressable style={styles.infoRow} onPress={() => router.push('/trip-planner')}>
         <Text style={styles.infoIcon}>✈︎</Text>
         <View style={{ flex: 1 }}>
-          <Text style={styles.infoRowTitle}>Plan Flight Redemption</Text>
+          <Text style={styles.infoRowTitle}>Travel Awards & Redemption Planner</Text>
           <Text style={styles.infoRowSub}>
-            Compare eligible airline transfer routes and check award availability with taxes. Open Trip Planner →
+            Plan flights, hotel stays (Marriott, Accor), and check net award value with tax deductions. Open Planner →
           </Text>
         </View>
+        <Text style={styles.programmeArrow}>→</Text>
       </Pressable>
+
+      <View style={styles.redemptionGrid}>
+        <View style={styles.redemptionPill}>
+          <Text style={styles.redemptionPillTitle}>✈️ Flights</Text>
+          <Text style={styles.redemptionPillDesc}>Miles transfer or portal</Text>
+        </View>
+        <View style={styles.redemptionPill}>
+          <Text style={styles.redemptionPillTitle}>🏨 Hotels</Text>
+          <Text style={styles.redemptionPillDesc}>Marriott, Accor, ITC</Text>
+        </View>
+        <View style={styles.redemptionPill}>
+          <Text style={styles.redemptionPillTitle}>💵 Statement Cash</Text>
+          <Text style={styles.redemptionPillDesc}>Direct bill credit</Text>
+        </View>
+        <View style={styles.redemptionPill}>
+          <Text style={styles.redemptionPillTitle}>🛍️ Vouchers</Text>
+          <Text style={styles.redemptionPillDesc}>Amazon, Flipkart, retail</Text>
+        </View>
+      </View>
     </View>
   );
 }
@@ -685,6 +719,33 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily,
     color: '#9A9A9A',
     fontSize: 13,
+    marginTop: 2,
+  },
+  redemptionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 14,
+  },
+  redemptionPill: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: '#161616',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#242424',
+    padding: 10,
+  },
+  redemptionPillTitle: {
+    fontFamily: typography.fontFamily,
+    color: '#ECECEC',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  redemptionPillDesc: {
+    fontFamily: typography.fontFamily,
+    color: '#777777',
+    fontSize: 10,
     marginTop: 2,
   },
 
