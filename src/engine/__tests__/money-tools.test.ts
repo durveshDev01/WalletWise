@@ -22,6 +22,7 @@ import {
   resolveAirportCode,
   irctcSearchUrl,
   redbusSearchUrl,
+  isDomesticSurfaceRoute,
 } from '../index';
 import type { Card, Catalog, RewardRow, UserProfile } from '../index';
 
@@ -363,6 +364,16 @@ describe('planTripPayment and transport handoffs', () => {
   it('builds external handoff URLs for IRCTC and redBus', () => {
     assert.ok(irctcSearchUrl().includes('irctc.co.in'));
     assert.equal(redbusSearchUrl('Pune', 'Goa'), 'https://www.redbus.in/bus-tickets/pune-to-goa');
+  });
+
+  it('identifies domestic surface routes vs international flights', () => {
+    assert.equal(isDomesticSurfaceRoute('PNQ', 'GOI'), true);
+    assert.equal(isDomesticSurfaceRoute('BOM', 'DEL'), true);
+    assert.equal(isDomesticSurfaceRoute('Pune', 'Goa'), true);
+    assert.equal(isDomesticSurfaceRoute('BLR', 'DXB'), false);
+    assert.equal(isDomesticSurfaceRoute('DEL', 'SIN'), false);
+    assert.equal(isDomesticSurfaceRoute('Delhi', 'Singapore'), false);
+    assert.equal(isDomesticSurfaceRoute('London', 'Mumbai'), false);
   });
 
   it('deducts award taxes and fees from net redemption value', () => {

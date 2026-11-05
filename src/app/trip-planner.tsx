@@ -10,6 +10,7 @@ import {
   resolveAirportCode,
   irctcSearchUrl,
   redbusSearchUrl,
+  isDomesticSurfaceRoute,
 } from '../engine';
 import type { Card } from '../engine';
 import { useCardStore } from '../store/useCardStore';
@@ -62,6 +63,7 @@ export default function TripPlannerScreen() {
 
   const fromCode = resolveAirportCode(from) || from.trim().toUpperCase();
   const toCode = resolveAirportCode(to) || to.trim().toUpperCase();
+  const isDomesticSurface = useMemo(() => isDomesticSurfaceRoute(from, to), [from, to]);
 
   const plan = useMemo(() => {
     const holdings = cards
@@ -224,14 +226,19 @@ export default function TripPlannerScreen() {
         <Pressable style={styles.skyscanner} onPress={openSkyscanner}>
           <Text style={styles.skyscannerText}>✈ Check real flights on Skyscanner ↗</Text>
         </Pressable>
-        <View style={styles.row2}>
-          <Pressable style={[styles.handoffBtn, { borderColor: '#E06A3B', backgroundColor: 'rgba(224,106,59,0.1)' }]} onPress={openIrctc}>
-            <Text style={[styles.handoffText, { color: '#FFA07A' }]}>🚆 IRCTC Trains ↗</Text>
-          </Pressable>
-          <Pressable style={[styles.handoffBtn, { borderColor: '#D84E55', backgroundColor: 'rgba(216,78,85,0.1)' }]} onPress={openRedBus}>
-            <Text style={[styles.handoffText, { color: '#FF7F85' }]}>🚌 redBus Intercity ↗</Text>
-          </Pressable>
-        </View>
+        {isDomesticSurface && (
+          <View style={{ marginTop: 8 }}>
+            <Text style={[styles.fieldLabel, { marginBottom: 6 }]}>Domestic surface alternatives</Text>
+            <View style={styles.row2}>
+              <Pressable style={[styles.handoffBtn, { borderColor: '#E06A3B', backgroundColor: 'rgba(224,106,59,0.1)' }]} onPress={openIrctc}>
+                <Text style={[styles.handoffText, { color: '#FFA07A' }]}>🚆 IRCTC Trains ↗</Text>
+              </Pressable>
+              <Pressable style={[styles.handoffBtn, { borderColor: '#D84E55', backgroundColor: 'rgba(216,78,85,0.1)' }]} onPress={openRedBus}>
+                <Text style={[styles.handoffText, { color: '#FF7F85' }]}>🚌 redBus Intercity ↗</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
       </View>
 
       {!plan && (

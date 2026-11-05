@@ -23,7 +23,7 @@ export {
   planGoal,
 } from './redemption';
 export { PARTNER_VALUES, partnerValue } from './partnerValues';
-export { planTripPayment, skyscannerUrl, resolveAirportCode, irctcSearchUrl, redbusSearchUrl, CITY_AIRPORT_MAP } from './trip';
+export { planTripPayment, skyscannerUrl, resolveAirportCode, irctcSearchUrl, redbusSearchUrl, isDomesticSurfaceRoute, CITY_AIRPORT_MAP } from './trip';
 export type { TripPlan, PointsUse, TripHolding } from './trip';
 export type { PortfolioAdvice, CardPick, WalletValue, CategoryAllocation } from './portfolio';
 export type { RedemptionRoute, RedemptionPlan, PointsValue, RedemptionQuote, RedemptionValue } from './redemption';

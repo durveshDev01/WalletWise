@@ -77,6 +77,47 @@ export function resolveAirportCode(query: string): string {
   return clean.toUpperCase();
 }
 
+export const KNOWN_INTERNATIONAL_AIRPORTS = new Set([
+  'DXB', 'SIN', 'LHR', 'BKK', 'JFK', 'SFO', 'EWR', 'CDG', 'FRA', 'AMS',
+  'DOH', 'AUH', 'KUL', 'HND', 'NRT', 'SYD', 'MEL', 'YYZ', 'YVR', 'ORD',
+]);
+
+export const INDIAN_DOMESTIC_AIRPORT_CODES = new Set([
+  'PNQ', 'BOM', 'DEL', 'BLR', 'GOI', 'MAA', 'CCU', 'HYD', 'AMD', 'COK',
+  'JAI', 'LKO', 'IXC', 'VNS', 'SXR', 'ATQ', 'IXB', 'IXR', 'PAT', 'BBI',
+  'TRV', 'CCJ', 'NAG', 'IDR', 'BHO', 'GAU', 'VTZ', 'UDR', 'BDQ', 'STV',
+  'IXE', 'CJB', 'IXM', 'TIR', 'DED', 'IXA', 'GOX', 'AYJ', 'HJR',
+]);
+
+/**
+ * Returns true if both origin and destination represent a domestic Indian surface route
+ * where trains (IRCTC) or intercity buses (redBus) are realistic travel alternatives.
+ */
+export function isDomesticSurfaceRoute(from: string, to: string): boolean {
+  const f = (from ?? '').trim().toLowerCase();
+  const t = (to ?? '').trim().toLowerCase();
+  if (!f || !t) return false;
+
+  const fromCode = resolveAirportCode(f);
+  const toCode = resolveAirportCode(t);
+
+  // International airport codes can never be domestic surface routes
+  if (KNOWN_INTERNATIONAL_AIRPORTS.has(fromCode) || KNOWN_INTERNATIONAL_AIRPORTS.has(toCode)) {
+    return false;
+  }
+
+  // If both airport codes are known Indian domestic airports
+  if (INDIAN_DOMESTIC_AIRPORT_CODES.has(fromCode) && INDIAN_DOMESTIC_AIRPORT_CODES.has(toCode)) {
+    return true;
+  }
+
+  // If city map knows them and neither is mapped to an international code
+  const isFromDomestic = INDIAN_DOMESTIC_AIRPORT_CODES.has(fromCode) || (Boolean(CITY_AIRPORT_MAP[f]) && !KNOWN_INTERNATIONAL_AIRPORTS.has(CITY_AIRPORT_MAP[f]));
+  const isToDomestic = INDIAN_DOMESTIC_AIRPORT_CODES.has(toCode) || (Boolean(CITY_AIRPORT_MAP[t]) && !KNOWN_INTERNATIONAL_AIRPORTS.has(CITY_AIRPORT_MAP[t]));
+
+  return Boolean(isFromDomestic && isToDomestic);
+}
+
 export function planTripPayment(
   catalog: Catalog,
   holdings: TripHolding[],

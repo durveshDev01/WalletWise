@@ -23,7 +23,8 @@ export type OfflineIntent =
       upi: boolean;
     }
   | { kind: 'points_value' }
-  | { kind: 'card_updates' };
+  | { kind: 'card_updates' }
+  | { kind: 'my_cards' };
 
 export type OfflineContext = {
   catalog: Catalog;
@@ -70,6 +71,7 @@ const CATEGORY_RULES: CategoryRule[] = [
 
 const UPDATES_WORDS = /\bchanges?\b|\bupdates?\b|devalu|बदलाव|अपडेट|परिवर्तन|badlav/i;
 const POINTS_WORDS = /\bpoints?\b|\bworth\b|\bredeem|\bmiles\b|पॉइंट|पॉइंट्स|प्वाइंट|अंक|रिडीम|माइल्स/i;
+const MY_CARDS_WORDS = /\b(?:my cards?|what cards?|which cards? (?:do i have|are in my wallet)|show (?:my )?cards?|wallet cards?)\b|मेरे कार्ड|मेरे वॉलेट|कार्ड्स दिखा/i;
 const CARD_QUESTION_WORDS =
   /which card|best card|what card|\buse\b|\bpay\b|\bearn|\bswipe|कौन सा|कौनसा|कौन-सा|kaun ?sa|konsa|सबसे अच्छा|इस्तेमाल|भुगतान|कमाई|मिलेगा|मिलेंगे/i;
 
@@ -107,6 +109,7 @@ export function matchOfflineIntent(question: string): OfflineIntent | null {
   const q = question.trim();
   if (!q) return null;
   if (UPDATES_WORDS.test(q)) return { kind: 'card_updates' };
+  if (MY_CARDS_WORDS.test(q)) return { kind: 'my_cards' };
 
   const amount = parseAmount(q);
   const rule = matchCategory(q);
@@ -245,11 +248,13 @@ function bestCardAnswer(intent: Extract<OfflineIntent, { kind: 'best_card' }>, c
     return `${header(lang, simple)} ${line}`;
   }
 
+  const cardNames =
+    cards.length <= 3 ? cards.map((c) => c.name).join(', ') : `${cards.slice(0, 2).map((c) => c.name).join(', ')} +${cards.length - 2} more`;
   const lines: string[] = [header(lang, simple)];
   lines.push(
     lang === 'hi'
-      ? `${amount} के ${CATEGORY_HI[intent.category] ?? ''} खर्च के लिए ${top.card.name} इस्तेमाल करें। लगभग ${inr(top.safeValue)} वापस मिलेंगे${units}।`
-      : `Use ${top.card.name} for ${amount} on ${CATEGORY_EN[intent.category] ?? 'this spend'}. You get about ${inr(top.safeValue)} back${units}.`,
+      ? `आपके वॉलेट के ${cards.length} कार्ड्स (${cardNames}) में से: ${amount} के ${CATEGORY_HI[intent.category] ?? ''} खर्च के लिए ${top.card.name} इस्तेमाल करें। लगभग ${inr(top.safeValue)} वापस मिलेंगे${units}।`
+      : `From your ${cards.length} wallet cards (${cardNames}): Use ${top.card.name} for ${amount} on ${CATEGORY_EN[intent.category] ?? 'this spend'}. You get about ${inr(top.safeValue)} back${units}.`,
   );
   const next = ranked[1];
   if (next) {
@@ -365,6 +370,42 @@ function updatesAnswer(cards: Card[], ctx: OfflineContext): string {
   return lines.join('\n');
 }
 
+function myCardsAnswer(held: { card: Card; points: number }[], ctx: OfflineContext): string {
+  const lang = ctx.language ?? 'en';
+  const simple = ctx.simple === true;
+  const count = held.length;
+
+  if (simple) {
+    const names = held.map((h) => h.card.name).join(', ');
+    const line =
+      lang === 'hi'
+        ? `आपके वॉलेट में ${count} कार्ड्स हैं: ${names}।`
+        : `You have ${count} ${count === 1 ? 'card' : 'cards'} in your wallet: ${names}.`;
+    return `${header(lang, simple)} ${line}`;
+  }
+
+  const lines = [
+    header(lang, simple),
+    lang === 'hi'
+      ? `आपके वॉलेट में ${count} कार्ड्स सेव हैं:`
+      : `You have ${count} ${count === 1 ? 'card' : 'cards'} saved in your wallet:`,
+  ];
+
+  for (const h of held) {
+    const val = h.points > 0 ? pointsValue(ctx.catalog, h.card, h.points) : null;
+    const pts = h.points > 0 ? ` · ${groupIndian(h.points)} points (~${inr(val?.low ?? 0)})` : '';
+    lines.push(`- ${h.card.name}${pts}`);
+  }
+
+  lines.push(
+    lang === 'hi'
+      ? 'सभी रिवॉर्ड नियम, पॉइंट्स और बेनिफ़िट ऑफ़लाइन उपलब्ध हैं।'
+      : 'All reward rules, points balances, and card benefits are stored locally and accessible offline.',
+  );
+
+  return lines.join('\n');
+}
+
 /** Answers the question on the phone, or returns null when it needs the Aura server. */
 export function answerOffline(question: string, ctx: OfflineContext): OfflineAnswer | null {
   const intent = matchOfflineIntent(question);
@@ -384,5 +425,7 @@ export function answerOffline(question: string, ctx: OfflineContext): OfflineAns
       return { intent: intent.kind, text: pointsAnswer(held, ctx) };
     case 'card_updates':
       return { intent: intent.kind, text: updatesAnswer(cards, ctx) };
+    case 'my_cards':
+      return { intent: intent.kind, text: myCardsAnswer(held, ctx) };
   }
 }
