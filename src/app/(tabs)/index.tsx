@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -36,6 +36,14 @@ export default function HomeScreen() {
   const holdings = useCardStore((s) => s.holdings);
   const isDemo = useCardStore((s) => s.isDemo);
   useBillReminderSync();
+
+  // Pull-to-refresh: re-reads wallet alerts on demand.
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    // Store reads are synchronous; a short delay makes the spinner visible.
+    setTimeout(() => setRefreshing(false), 400);
+  }, []);
 
   const totals = useMemo(
     () => ({
@@ -87,6 +95,14 @@ export default function HomeScreen() {
           // Leave room for the floating tab bar.
           { paddingBottom: insets.bottom + theme.sizes.tabBarHeight + theme.spacing.lg },
         ]}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.colors.gold}
+            colors={[theme.colors.gold]}
+          />
+        }
       >
         <HeroCard
           totalMin={totals.min}

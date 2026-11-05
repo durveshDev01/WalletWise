@@ -32,7 +32,7 @@ export const AURA_STRINGS: Record<AppLanguage, AuraStrings> = {
     welcome:
       "Hi, I'm Aura. Ask me which of your cards to use, what your points are worth, about any Indian credit card, or how credit cards work.",
     placeholder: 'Ask Aura anything about cards…',
-    suggestions: ['Which card for ₹1,500 at Swiggy?', 'Tell me about Diners Black International', 'Any changes to my cards?', 'How should I use my points?'],
+    suggestions: ['Which card for ₹1,500 at Swiggy?', 'Tell me about Diners Black International', 'Any changes to my cards?', 'How should I use my points?', 'What cards do I have?'],
     tryAgain: 'Try again ↻',
     askOnline: 'Ask Aura online ↻',
     offlineLabel: 'OFFLINE ANSWER',
@@ -56,7 +56,7 @@ export const AURA_STRINGS: Record<AppLanguage, AuraStrings> = {
     welcome:
       'नमस्ते, मैं Aura हूँ। मुझसे पूछिए कि किस खर्च पर कौन सा कार्ड इस्तेमाल करें, आपके पॉइंट्स की कीमत क्या है, किसी भी भारतीय क्रेडिट कार्ड के बारे में, या क्रेडिट कार्ड कैसे काम करते हैं।',
     placeholder: 'कार्ड के बारे में Aura से कुछ भी पूछें…',
-    suggestions: ['Swiggy पर ₹1,500 के लिए कौन सा कार्ड?', 'Diners Black International के बारे में बताइए', 'मेरे कार्ड्स में कोई बदलाव?', 'अपने पॉइंट्स कैसे इस्तेमाल करूँ?'],
+    suggestions: ['Swiggy पर ₹1,500 के लिए कौन सा कार्ड?', 'Diners Black International के बारे में बताइए', 'मेरे कार्ड्स में कोई बदलाव?', 'अपने पॉइंट्स कैसे इस्तेमाल करूँ?', 'मेरे पास कौन से कार्ड हैं?'],
     tryAgain: 'फिर कोशिश करें ↻',
     askOnline: 'Aura से ऑनलाइन पूछें ↻',
     offlineLabel: 'ऑफ़लाइन जवाब',
