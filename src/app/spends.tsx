@@ -61,7 +61,6 @@ export default function SpendsScreen() {
   // Falls back to the first card, also after the saved wallet loads or a card is removed.
   const cardId = pickedCard && cards.some((c) => c.id === pickedCard) ? pickedCard : (cards[0]?.id ?? null);
   const [online, setOnline] = useState(false);
-  const [yesterday, setYesterday] = useState(false);
   const [paymentMode, setPaymentMode] = useState<'CARD' | 'UPI' | 'DEBIT' | 'CASH'>('CARD');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [spendDate, setSpendDate] = useState(new Date());
@@ -82,9 +81,7 @@ export default function SpendsScreen() {
   const canAdd = value > 0 && (paymentMode !== 'CARD' || !!cardId);
   const add = () => {
     if (!canAdd || (paymentMode === 'CARD' && !cardId)) return;
-    const day = new Date(spendDate);
-    if (yesterday) day.setDate(day.getDate() - 1);
-    const date = localIsoDate(day);
+    const date = localIsoDate(spendDate);
     const entry = { amount: Math.round(value * 100) / 100, category, cardId: paymentMode === 'CARD' ? cardId! : '', date, online: online || category === 'ONLINE_SHOPPING', paymentMode };
     if (editingId) updateSpend(editingId, entry); else addSpend(entry);
     setEditingId(null);
@@ -117,7 +114,7 @@ export default function SpendsScreen() {
             <Heading>{calendarMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</Heading>
             <Button kind="secondary" label="›" onPress={() => setCalendarMonth((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))} />
           </View>
-          <View style={kitStyles.wrap}>{Array.from({ length: new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1).getDay() }, (_, i) => <Text key={`blank-${i}`} style={styles.day}> </Text>)}{Array.from({ length: new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0).getDate() }, (_, i) => { const day = i + 1; const date = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), day); const disabled = date > new Date(); return <Pressable key={day} disabled={disabled} onPress={() => { setSpendDate(date); setYesterday(false); setDatePickerOpen(false); }} accessibilityRole="button" accessibilityLabel={`Choose ${localIsoDate(date)}`}><Text style={[styles.day, disabled && styles.disabledDay]}>{day}</Text></Pressable>; })}</View>
+          <View style={kitStyles.wrap}>{Array.from({ length: new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1).getDay() }, (_, i) => <Text key={`blank-${i}`} style={styles.day}> </Text>)}{Array.from({ length: new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0).getDate() }, (_, i) => { const day = i + 1; const date = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), day); const disabled = date > new Date(); return <Pressable key={day} disabled={disabled} onPress={() => { setSpendDate(date); setDatePickerOpen(false); }} accessibilityRole="button" accessibilityLabel={`Choose ${localIsoDate(date)}`}><Text style={[styles.day, disabled && styles.disabledDay]}>{day}</Text></Pressable>; })}</View>
         </Block>}
         <View style={kitStyles.wrap}>
           {(['CARD', 'UPI', 'DEBIT', 'CASH'] as const).map((mode) => <Chip key={mode} label={{ CARD: 'Credit card', UPI: 'UPI', DEBIT: 'Debit card', CASH: 'Cash' }[mode]} selected={paymentMode === mode} onPress={() => setPaymentMode(mode)} />)}
@@ -301,7 +298,7 @@ export default function SpendsScreen() {
               >
                 <Text style={styles.removeText}>✕</Text>
               </Pressable>
-              <Pressable onPress={() => { setEditingId(s.id); setAmount(String(s.amount)); setCategory(s.category); setCardId(s.cardId); setPaymentMode(s.paymentMode ?? 'CARD'); setOnline(!!s.online); setSpendDate(new Date(`${s.date}T12:00:00`)); setYesterday(false); }} accessibilityRole="button" accessibilityLabel={`Edit spend of ${inr(s.amount)}`}><Text style={styles.edit}>Edit</Text></Pressable>
+              <Pressable onPress={() => { setEditingId(s.id); setAmount(String(s.amount)); setCategory(s.category); setCardId(s.cardId); setPaymentMode(s.paymentMode ?? 'CARD'); setOnline(!!s.online); setSpendDate(new Date(`${s.date}T12:00:00`)); }} accessibilityRole="button" accessibilityLabel={`Edit spend of ${inr(s.amount)}`}><Text style={styles.edit}>Edit</Text></Pressable>
             </View>
           ))}
         </Block>

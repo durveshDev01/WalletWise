@@ -46,8 +46,10 @@ export default function HomeScreen() {
     [cards],
   );
   const hasAlerts = useMemo(
-    () => walletAlerts(catalog, holdings.map((h) => h.catalogId), undefined, ALERT_WINDOW_DAYS).length > 0,
-    [holdings],
+    () =>
+      walletAlerts(catalog, holdings.map((h) => h.catalogId), undefined, ALERT_WINDOW_DAYS).length > 0 ||
+      cards.some((c) => c.expiryDays != null && c.expiryDays <= 60 && c.points > 0),
+    [holdings, cards],
   );
 
   const openCard = useCallback((id: string) => router.push({ pathname: '/card-detail', params: { id } }), [router]);
