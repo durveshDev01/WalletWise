@@ -330,19 +330,35 @@ export default function CardDetailScreen() {
     setLastFourText(card.lastFour);
     setStatementDayText(holding?.statementDay ? String(holding.statementDay) : '');
     setDueDayText(holding?.dueDay ? String(holding.dueDay) : '');
-    setExpiryDaysText(card.expiryDays != null ? String(card.expiryDays) : '');
+    setExpiryDaysText(card.expiryDate ? card.expiryDate : card.expiryDays != null ? String(card.expiryDays) : '');
     setEditing(true);
   };
   const saveEdit = () => {
     if (!/^\d+$/.test(pointsText.trim())) { Alert.alert('Enter points', 'Enter the current points or cashback balance. Enter 0 if you do not know it yet.'); return; }
     if ([statementDayText, dueDayText].some((day) => day.trim() && !parseBillDay(day))) { Alert.alert('Check bill day', 'Statement and due days must be whole numbers from 1 to 31.'); return; }
-    const expDaysNum = expiryDaysText.trim() ? Number(expiryDaysText.replace(/\D/g, '')) : undefined;
+
+    const trimmedExpiry = expiryDaysText.trim();
+    let expiryDateVal: string | undefined;
+    let expiryDaysVal: number | undefined;
+
+    if (trimmedExpiry) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmedExpiry)) {
+        expiryDateVal = trimmedExpiry;
+      } else if (/^\d+$/.test(trimmedExpiry)) {
+        expiryDaysVal = Number(trimmedExpiry);
+      } else {
+        Alert.alert('Check expiry', 'Please enter remaining days (e.g. 30) or a date in YYYY-MM-DD format.');
+        return;
+      }
+    }
+
     updateHolding(card.id, {
       points: Number(pointsText.replace(/[^0-9]/g, '')) || 0,
       lastFour: lastFourText.replace(/[^0-9]/g, '').slice(-4),
       statementDay: parseBillDay(statementDayText),
       dueDay: parseBillDay(dueDayText),
-      expiryDays: expDaysNum,
+      expiryDays: expiryDaysVal,
+      expiryDate: expiryDateVal,
     });
     setEditing(false);
   };
@@ -403,7 +419,7 @@ export default function CardDetailScreen() {
                 <TextInput value={lastFourText} onChangeText={setLastFourText} keyboardType="number-pad" maxLength={4} style={s.editInput} placeholder="Last 4 digits" placeholderTextColor="#555" keyboardAppearance="dark" />
                 <TextInput value={statementDayText} onChangeText={setStatementDayText} keyboardType="number-pad" maxLength={2} style={s.editInput} placeholder="Statement day (1–31, optional)" placeholderTextColor="#555" keyboardAppearance="dark" />
                 <TextInput value={dueDayText} onChangeText={setDueDayText} keyboardType="number-pad" maxLength={2} style={s.editInput} placeholder="Due day (1–31, for reminders)" placeholderTextColor="#555" keyboardAppearance="dark" />
-                <TextInput value={expiryDaysText} onChangeText={setExpiryDaysText} keyboardType="number-pad" maxLength={4} style={s.editInput} placeholder="Points expire in (days, optional)" placeholderTextColor="#555" keyboardAppearance="dark" />
+                <TextInput value={expiryDaysText} onChangeText={setExpiryDaysText} style={s.editInput} placeholder="Points expire in (days or YYYY-MM-DD, optional)" placeholderTextColor="#555" keyboardAppearance="dark" />
                 <Text style={s.statsValue}>Copy the balance and dates from your latest statement or bank app.</Text>
               </View>
             ) : (
@@ -411,7 +427,11 @@ export default function CardDetailScreen() {
                 <Text style={s.pointsNumerals}>{card.points.toLocaleString('en-IN')}</Text>
                 {card.expiryDays != null && (
                   <Text style={[s.statsValue, { color: '#E06D53', marginTop: 4 }]}>
-                    {card.expiryDays === 0 ? '⚠️ Points expire today' : card.expiryDays === 1 ? '⚠️ Points expire tomorrow' : `⚠️ Points expire in ${card.expiryDays} days`}
+                    {card.expiryDays === 0
+                      ? '⚠️ Points expire today'
+                      : card.expiryDays === 1
+                      ? '⚠️ Points expire tomorrow'
+                      : `⚠️ Points expire in ${card.expiryDays} days${card.expiryDate ? ` (${card.expiryDate})` : ''}`}
                   </Text>
                 )}
               </View>

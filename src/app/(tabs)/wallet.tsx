@@ -37,38 +37,49 @@ const EXPANDED_SPACING = 85;       // Overlapping spread distance
 // ─────────────────────────────────────────────
 function ExpiryBanner({ cards }: { cards: CardData[] }) {
   const router = useRouter();
-  const expiringCard = cards.find(c => c.expiryDays != null && c.expiryDays <= 30);
-  if (!expiringCard) return null;
+  const expiringCards = cards
+    .filter(c => c.expiryDays != null && c.expiryDays <= 30 && c.points > 0)
+    .sort((a, b) => (a.expiryDays ?? 0) - (b.expiryDays ?? 0));
 
-  const isToday = expiringCard.expiryDays === 0;
-  const isTomorrow = expiringCard.expiryDays === 1;
+  if (expiringCards.length === 0) return null;
 
   return (
-    <View style={[styles.infoCard, { borderColor: 'rgba(201, 65, 46, 0.3)' }]}>
-      <View style={styles.expiryBody}>
-        <Text style={[styles.infoLabel, { color: colors.accent.danger }]}>
-          {isToday ? `${expiringCard.currencyName.toUpperCase()} EXPIRING TODAY` : `${expiringCard.currencyName.toUpperCase()} EXPIRING SOON`}
-        </Text>
-        <View style={styles.expiryStats}>
-          <View style={styles.expiryStat}>
-            <Text style={styles.infoBigNum}>{expiringCard.points.toLocaleString('en-IN')}</Text>
-            <Text style={styles.infoUnit}>{expiringCard.currencyName}</Text>
+    <>
+      {expiringCards.map((card) => {
+        const isToday = card.expiryDays === 0;
+        const isTomorrow = card.expiryDays === 1;
+
+        return (
+          <View key={card.id} style={[styles.infoCard, { borderColor: 'rgba(201, 65, 46, 0.3)' }]}>
+            <View style={styles.expiryBody}>
+              <Text style={[styles.infoLabel, { color: colors.accent.danger }]}>
+                {isToday ? `${card.currencyName.toUpperCase()} EXPIRING TODAY` : `${card.currencyName.toUpperCase()} EXPIRING SOON`}
+              </Text>
+              <View style={styles.expiryStats}>
+                <View style={styles.expiryStat}>
+                  <Text style={styles.infoBigNum}>{card.points.toLocaleString('en-IN')}</Text>
+                  <Text style={styles.infoUnit}>{card.currencyName}</Text>
+                </View>
+                <View style={styles.expiryDivider} />
+                <View style={styles.expiryStat}>
+                  <Text style={styles.infoBigNum}>{isToday ? 'Today' : isTomorrow ? '1' : card.expiryDays}</Text>
+                  <Text style={styles.infoUnit}>{isToday ? 'expires' : isTomorrow ? 'day left' : 'days left'}</Text>
+                </View>
+              </View>
+              <Text style={styles.infoSubtext}>{card.bankName} {card.cardName}</Text>
+            </View>
+            <Pressable
+              style={styles.expiryCtaButton}
+              onPress={() => router.push({ pathname: '/card-detail', params: { id: card.id, tab: 'Redeem' } })}
+              accessibilityRole="button"
+              accessibilityLabel={`Redeem ${card.bankName} ${card.cardName} expiring points`}
+            >
+              <Text style={styles.expiryCta}>Redeem →</Text>
+            </Pressable>
           </View>
-          <View style={styles.expiryDivider} />
-          <View style={styles.expiryStat}>
-            <Text style={styles.infoBigNum}>{isToday ? 'Today' : isTomorrow ? '1' : expiringCard.expiryDays}</Text>
-            <Text style={styles.infoUnit}>{isToday ? 'expires' : isTomorrow ? 'day left' : 'days left'}</Text>
-          </View>
-        </View>
-        <Text style={styles.infoSubtext}>{expiringCard.bankName} {expiringCard.cardName}</Text>
-      </View>
-      <Pressable
-        style={styles.expiryCtaButton}
-        onPress={() => router.push({ pathname: '/card-detail', params: { id: expiringCard.id, tab: 'Redeem' } })}
-      >
-        <Text style={styles.expiryCta}>Redeem →</Text>
-      </Pressable>
-    </View>
+        );
+      })}
+    </>
   );
 }
 

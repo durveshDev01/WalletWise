@@ -44,7 +44,7 @@ export default function NotificationsScreen() {
 
   // 3. Expiring points
   const expiringCards = useMemo(() => {
-    return cards.filter((c) => c.expiryDays != null && c.expiryDays <= 60);
+    return cards.filter((c) => c.expiryDays != null && c.expiryDays <= 60 && c.points > 0);
   }, [cards]);
 
   const totalAlertsCount = devaluations.length + billDues.filter((b) => b.daysLeft <= 7).length + expiringCards.length;
