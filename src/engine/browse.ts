@@ -47,6 +47,33 @@ export const CARD_FILTERS: CardFilter[] = [
   },
 ];
 
+export const BROWSE_BANKS: { key: string; label: string }[] = [
+  { key: 'HDFC', label: 'HDFC' },
+  { key: 'SBI', label: 'SBI' },
+  { key: 'ICICI', label: 'ICICI' },
+  { key: 'AXIS', label: 'Axis' },
+  { key: 'AMEX', label: 'Amex' },
+  { key: 'KOTAK', label: 'Kotak' },
+  { key: 'IDFC', label: 'IDFC FIRST' },
+  { key: 'AU', label: 'AU Small Fin' },
+  { key: 'RBL', label: 'RBL' },
+  { key: 'YES', label: 'YES Bank' },
+  { key: 'INDUSIND', label: 'IndusInd' },
+  { key: 'HSBC', label: 'HSBC' },
+  { key: 'BOB', label: 'Bank of Baroda' },
+  { key: 'PNB', label: 'PNB' },
+  { key: 'FEDERAL', label: 'Federal' },
+  { key: 'SC', label: 'Standard Chartered' },
+];
+
+export const BROWSE_NETWORKS: { key: string; label: string }[] = [
+  { key: 'VISA', label: 'Visa' },
+  { key: 'MASTERCARD', label: 'Mastercard' },
+  { key: 'RUPAY', label: 'RuPay' },
+  { key: 'AMEX', label: 'Amex' },
+  { key: 'DINERS', label: 'Diners Club' },
+];
+
 export type BrowseRow = {
   card: Card;
   /** Yearly value (rewards + perks - fee) at the user's spend, or null when no spend profile is used. */
@@ -57,18 +84,33 @@ export type BrowseRow = {
 
 const feeWithGst = (c: Card) => (hasNoFee(c) ? 0 : (c.annualFee ?? 0) * (1 + GST));
 
+export type BrowseOptions = {
+  query?: string;
+  filterKeys?: string[];
+  banks?: string[];
+  networks?: string[];
+  profile?: UserProfile | null;
+  limit?: number;
+};
+
 /**
- * Searches and filters the catalog. With a profile, rows are sorted by the yearly value of
- * holding that one card at the user's spend; without one, by fee (lowest first).
+ * Searches and filters the catalog. Supports multi-select bank, network and feature filtering.
+ * With a profile, rows are sorted by the yearly value of holding that one card at the user's spend;
+ * without one, by fee (lowest first).
  */
 export function browseCards(
   catalog: Catalog,
-  options: { query?: string; filterKeys?: string[]; profile?: UserProfile | null; limit?: number } = {},
+  options: BrowseOptions = {},
 ): BrowseRow[] {
   const words = (options.query ?? '').toLowerCase().split(/\s+/).filter(Boolean);
   const active = CARD_FILTERS.filter((f) => options.filterKeys?.includes(f.key));
+  const activeBanks = (options.banks ?? []).map((b) => b.toUpperCase());
+  const activeNetworks = (options.networks ?? []).map((n) => n.toUpperCase());
+
   const matches = catalog.cards.filter((c) => {
     if (!active.every((f) => f.test(c))) return false;
+    if (activeBanks.length > 0 && !activeBanks.includes(c.issuer.toUpperCase())) return false;
+    if (activeNetworks.length > 0 && !activeNetworks.includes(c.network.toUpperCase())) return false;
     if (words.length === 0) return true;
     const haystack = `${c.name} ${c.issuer} ${c.id} ${c.network}`.toLowerCase();
     return words.every((w) => haystack.includes(w));

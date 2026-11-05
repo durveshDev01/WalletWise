@@ -211,6 +211,18 @@ describe('browseCards', () => {
     const r = browseCards(realCatalog, { query: 'sbi cashback' });
     assert.ok(r.some((x) => x.card.id === 'sbi-cashback'));
   });
+
+  it('filters by multiple banks and networks with empty state safety', () => {
+    const hdfcAndSbi = browseCards(realCatalog, { banks: ['HDFC', 'SBI'] });
+    assert.ok(hdfcAndSbi.length > 0);
+    assert.ok(hdfcAndSbi.every((r) => ['HDFC', 'SBI'].includes(r.card.issuer.toUpperCase())));
+    const rupayOnly = browseCards(realCatalog, { networks: ['RUPAY'] });
+    assert.ok(rupayOnly.length > 0);
+    assert.ok(rupayOnly.every((r) => r.card.network === 'RUPAY'));
+    const combo = browseCards(realCatalog, { banks: ['HDFC'], networks: ['RUPAY'] });
+    assert.ok(combo.length > 0);
+    assert.ok(combo.every((r) => r.card.issuer === 'HDFC' && r.card.network === 'RUPAY'));
+  });
 });
 
 describe('feeCheck', () => {
@@ -330,3 +342,4 @@ describe('missedRewards', () => {
     assert.deepEqual([at.rows[0].bestCard?.id, at.totalMissed], ['swiggy10', 90]);
   });
 });
+
