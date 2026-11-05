@@ -59,7 +59,7 @@ export default function HomeScreen() {
 
   const quickActions: QuickAction[] = useMemo(
     () => [
-      { key: 'find', title: 'Find My Card', icon: 'sparkle', onPress: () => router.push('/find-card') },
+      { key: 'find', title: 'Find Next Card', icon: 'sparkle', onPress: () => router.push('/find-card') },
       { key: 'trip', title: 'Trip Planner', icon: 'plane', onPress: () => router.push('/trip-planner') },
       { key: 'nearby', title: 'Best Card Nearby', icon: 'pin', onPress: () => router.push('/map') },
       { key: 'add', title: 'Add a Card', icon: 'plus', onPress: () => router.push('/add-card') },
@@ -137,3 +137,4 @@ const styles = StyleSheet.create({
   },
   fullBleed: { marginHorizontal: -theme.spacing.md },
 });
+
