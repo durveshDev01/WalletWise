@@ -18,6 +18,10 @@ import {
   rewardsOnSpend,
   safeRupeesPerPoint,
   bestRupeesPerPoint,
+  planTripPayment,
+  resolveAirportCode,
+  irctcSearchUrl,
+  redbusSearchUrl,
 } from '../index';
 import type { Card, Catalog, RewardRow, UserProfile } from '../index';
 
@@ -343,3 +347,49 @@ describe('missedRewards', () => {
   });
 });
 
+
+// ── Trip Planner: transparent fares & transport ───────────
+describe('planTripPayment and transport handoffs', () => {
+  it('resolves city names and airport codes accurately', () => {
+    assert.equal(resolveAirportCode('pune'), 'PNQ');
+    assert.equal(resolveAirportCode('Mumbai'), 'BOM');
+    assert.equal(resolveAirportCode('Delhi'), 'DEL');
+    assert.equal(resolveAirportCode('BENGALURU'), 'BLR');
+    assert.equal(resolveAirportCode('Goa'), 'GOI');
+    assert.equal(resolveAirportCode('dxb'), 'DXB');
+    assert.equal(resolveAirportCode('LHR'), 'LHR');
+  });
+
+  it('builds external handoff URLs for IRCTC and redBus', () => {
+    assert.ok(irctcSearchUrl().includes('irctc.co.in'));
+    assert.equal(redbusSearchUrl('Pune', 'Goa'), 'https://www.redbus.in/bus-tickets/pune-to-goa');
+  });
+
+  it('deducts award taxes and fees from net redemption value', () => {
+    const infinia = realCatalog.byId.get('hdfc-infinia');
+    if (!infinia) return;
+
+    const planWithoutTaxes = planTripPayment(
+      realCatalog,
+      [{ card: infinia, points: 10000 }],
+      15000,
+      { awardTaxesRs: 0 },
+    );
+    assert.ok(planWithoutTaxes.pointsOptions.length > 0);
+    const topOptionWithoutTaxes = planWithoutTaxes.pointsOptions[0];
+
+    const planWithTaxes = planTripPayment(
+      realCatalog,
+      [{ card: infinia, points: 10000 }],
+      15000,
+      { awardTaxesRs: 1500 },
+    );
+    assert.ok(planWithTaxes.pointsOptions.length > 0);
+    const topOptionWithTaxes = planWithTaxes.pointsOptions[0];
+
+    assert.equal(topOptionWithTaxes.awardTaxesRs, 1500);
+    assert.equal(topOptionWithTaxes.valueRs, topOptionWithoutTaxes.valueRs);
+    assert.equal(topOptionWithTaxes.netValueRs, Math.max(0, topOptionWithoutTaxes.valueRs - 1500));
+    assert.ok(planWithTaxes.notes.some((n) => n.includes('taxes/carrier fees')));
+  });
+});
