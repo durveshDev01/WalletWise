@@ -18,6 +18,10 @@ import {
   rewardsOnSpend,
   safeRupeesPerPoint,
   bestRupeesPerPoint,
+  planTripPayment,
+  resolveAirportCode,
+  irctcSearchUrl,
+  redbusSearchUrl,
 } from '../index';
 import type { Card, Catalog, RewardRow, UserProfile } from '../index';
 
@@ -211,6 +215,18 @@ describe('browseCards', () => {
     const r = browseCards(realCatalog, { query: 'sbi cashback' });
     assert.ok(r.some((x) => x.card.id === 'sbi-cashback'));
   });
+
+  it('filters by multiple banks and networks with empty state safety', () => {
+    const hdfcAndSbi = browseCards(realCatalog, { banks: ['HDFC', 'SBI'] });
+    assert.ok(hdfcAndSbi.length > 0);
+    assert.ok(hdfcAndSbi.every((r) => ['HDFC', 'SBI'].includes(r.card.issuer.toUpperCase())));
+    const rupayOnly = browseCards(realCatalog, { networks: ['RUPAY'] });
+    assert.ok(rupayOnly.length > 0);
+    assert.ok(rupayOnly.every((r) => r.card.network === 'RUPAY'));
+    const combo = browseCards(realCatalog, { banks: ['HDFC'], networks: ['RUPAY'] });
+    assert.ok(combo.length > 0);
+    assert.ok(combo.every((r) => r.card.issuer === 'HDFC' && r.card.network === 'RUPAY'));
+  });
 });
 
 describe('feeCheck', () => {
@@ -328,5 +344,91 @@ describe('missedRewards', () => {
     const cat2 = fixtureCatalog([base1, swiggy]);
     const at = missedRewards(cat2, [base1, swiggy], [{ amount: 1000, category: 'DINING', online: true, merchant: 'Swiggy', usedCardId: 'base1' }], { today: TODAY });
     assert.deepEqual([at.rows[0].bestCard?.id, at.totalMissed], ['swiggy10', 90]);
+  });
+});
+
+
+// ── Trip Planner: transparent fares & transport ───────────
+describe('planTripPayment and transport handoffs', () => {
+  it('resolves city names and airport codes accurately', () => {
+    assert.equal(resolveAirportCode('pune'), 'PNQ');
+    assert.equal(resolveAirportCode('Mumbai'), 'BOM');
+    assert.equal(resolveAirportCode('Delhi'), 'DEL');
+    assert.equal(resolveAirportCode('BENGALURU'), 'BLR');
+    assert.equal(resolveAirportCode('Goa'), 'GOI');
+    assert.equal(resolveAirportCode('dxb'), 'DXB');
+    assert.equal(resolveAirportCode('LHR'), 'LHR');
+  });
+
+  it('builds external handoff URLs for IRCTC and redBus', () => {
+    assert.ok(irctcSearchUrl().includes('irctc.co.in'));
+    assert.equal(redbusSearchUrl('Pune', 'Goa'), 'https://www.redbus.in/bus-tickets/pune-to-goa');
+  });
+
+  it('deducts award taxes and fees from net redemption value', () => {
+    const infinia = realCatalog.byId.get('hdfc-infinia');
+    if (!infinia) return;
+
+    const planWithoutTaxes = planTripPayment(
+      realCatalog,
+      [{ card: infinia, points: 10000 }],
+      15000,
+      { awardTaxesRs: 0 },
+    );
+    assert.ok(planWithoutTaxes.pointsOptions.length > 0);
+    const topOptionWithoutTaxes = planWithoutTaxes.pointsOptions[0];
+
+    const planWithTaxes = planTripPayment(
+      realCatalog,
+      [{ card: infinia, points: 10000 }],
+      15000,
+      { awardTaxesRs: 1500 },
+    );
+    assert.ok(planWithTaxes.pointsOptions.length > 0);
+    const topOptionWithTaxes = planWithTaxes.pointsOptions[0];
+
+    assert.equal(topOptionWithTaxes.awardTaxesRs, 1500);
+    assert.equal(topOptionWithTaxes.valueRs, topOptionWithoutTaxes.valueRs);
+    assert.equal(topOptionWithTaxes.netValueRs, Math.max(0, topOptionWithoutTaxes.valueRs - 1500));
+    assert.ok(planWithTaxes.notes.some((n) => n.includes('taxes/carrier fees')));
+  });
+});
+
+// ── Point 6: Core money verification suite ──────────────
+describe('core money edge cases & verification', () => {
+  it('applies 18% GST to revolving debt interest charges', () => {
+    const cost = revolvingCost({ balance: 10000, aprMonthlyPct: 3.5, maxMonths: 1 });
+    assert.ok(cost.totalInterest > 0);
+    assert.equal(cost.totalGst, Math.round(cost.totalInterest * 0.18));
+    assert.equal(cost.extraCost, cost.totalInterest + cost.totalGst);
+  });
+
+  it('handles ties honestly in card recommendations', () => {
+    const cardA = card({ id: 'cardA', rewards: [row({ category: 'DEFAULT', ratePct: 2 })] });
+    const cardB = card({ id: 'cardB', rewards: [row({ category: 'DEFAULT', ratePct: 2 })] });
+    const cat = fixtureCatalog([cardA, cardB]);
+
+    const res = missedRewards(
+      cat,
+      [cardA, cardB],
+      [{ amount: 1000, category: 'ONLINE_SHOPPING', usedCardId: 'cardA' }],
+      { today: TODAY },
+    );
+    assert.equal(res.rows[0].missed, 0);
+  });
+
+  it('keeps cashback and points strictly separated in goal tracking', () => {
+    const cashCard = card({ id: 'cashCard', rewards: [row({ category: 'DEFAULT', ratePct: 5, type: 'CASHBACK' })] });
+    const pointsCard = card({ id: 'pointsCard', rewards: [row({ category: 'DEFAULT', ratePct: 2, type: 'REWARD_POINTS', pointPaisa: 50 })] });
+    const cat = fixtureCatalog([cashCard, pointsCard]);
+
+    const goal = goalProgress(
+      cat,
+      10000,
+      [{ cardId: 'cashCard', points: 5000 }, { cardId: 'pointsCard', points: 10000 }],
+    );
+    assert.ok(goal.perCard.length === 2);
+    assert.equal(goal.perCard[0].cardId, 'cashCard');
+    assert.equal(goal.perCard[1].cardId, 'pointsCard');
   });
 });

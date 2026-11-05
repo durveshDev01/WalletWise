@@ -19,7 +19,7 @@ import { theme } from '../../theme';
 // come from services/auraStrings.ts in the chosen language.
 
 /** Errors after which the phone answers common questions itself (services/offlineAura.ts). */
-const OFFLINE_FALLBACK: AuraErrorKind[] = ['offline', 'busy', 'timeout'];
+const OFFLINE_FALLBACK: AuraErrorKind[] = ['offline', 'busy', 'timeout', 'setup'];
 /** Wait before the one automatic retry when Aura is busy. */
 const BUSY_RETRY_MS = 3000;
 
@@ -74,14 +74,31 @@ export default function AuraScreen() {
   const language = useCardStore((s) => s.auraLanguage ?? 'en');
   const simple = useCardStore((s) => s.auraSimple === true);
   const setAuraLanguage = useCardStore((s) => s.setAuraLanguage);
+  const savedMessages = useCardStore((s) => s.auraMessages);
+  const setAuraMessages = useCardStore((s) => s.setAuraMessages);
+  const clearAuraMessages = useCardStore((s) => s.clearAuraMessages);
   const t = AURA_STRINGS[language];
   const scrollRef = useRef<ScrollView>(null);
   const handledQuery = useRef<string | undefined>(undefined);
 
-  const [messages, setMessages] = useState<Message[]>([{ id: 'welcome', role: 'assistant', content: '', state: 'done' }]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    if (savedMessages && savedMessages.length > 0) return savedMessages;
+    return [{ id: 'welcome', role: 'assistant', content: '', state: 'done' }];
+  });
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!busy && messages.length > 0 && messages.every((m) => m.state !== 'streaming')) {
+      setAuraMessages(messages);
+    }
+  }, [messages, busy, setAuraMessages]);
+
+  const handleClearChat = () => {
+    clearAuraMessages();
+    setMessages([{ id: 'welcome', role: 'assistant', content: '', state: 'done' }]);
+  };
 
   const patch = (id: string, change: Partial<Message> | ((m: Message) => Partial<Message>)) =>
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, ...(typeof change === 'function' ? change(m) : change) } : m)));
@@ -190,7 +207,11 @@ export default function AuraScreen() {
   const showSuggestions = messages.length === 1 && !busy;
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <View style={styles.headerIcon}>
@@ -200,17 +221,30 @@ export default function AuraScreen() {
             AURA
           </Text>
           <Text style={theme.text.caption}>{simple ? `${t.caption} · ${t.simpleOn}` : t.caption}</Text>
-          <Pressable
-            onPress={() => setAuraLanguage(language === 'hi' ? 'en' : 'hi')}
-            accessibilityRole="button"
-            accessibilityLabel={t.languageToggle}
-            hitSlop={theme.spacing.sm}
-            style={({ pressed }) => [styles.langToggle, pressed && styles.pressed]}
-          >
-            <Text style={[theme.text.caption, language === 'en' ? styles.langOn : undefined]}>EN</Text>
-            <Text style={theme.text.caption}>|</Text>
-            <Text style={[theme.text.caption, language === 'hi' ? styles.langOn : undefined]}>हिं</Text>
-          </Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Pressable
+              onPress={() => setAuraLanguage(language === 'hi' ? 'en' : 'hi')}
+              accessibilityRole="button"
+              accessibilityLabel={t.languageToggle}
+              hitSlop={theme.spacing.sm}
+              style={({ pressed }) => [styles.langToggle, pressed && styles.pressed]}
+            >
+              <Text style={[theme.text.caption, language === 'en' ? styles.langOn : undefined]}>EN</Text>
+              <Text style={theme.text.caption}>|</Text>
+              <Text style={[theme.text.caption, language === 'hi' ? styles.langOn : undefined]}>हिं</Text>
+            </Pressable>
+            {messages.length > 1 && (
+              <Pressable
+                onPress={handleClearChat}
+                accessibilityRole="button"
+                accessibilityLabel="Clear chat history"
+                hitSlop={theme.spacing.sm}
+                style={styles.clearChatBtn}
+              >
+                <Text style={styles.clearChatText}>Clear</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
 
         <ScrollView
@@ -340,6 +374,20 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.goldBorder,
   },
   headerTitle: { color: theme.colors.gold, fontWeight: '700', letterSpacing: 2 },
+  clearChatBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: theme.radius.sm,
+    backgroundColor: '#1E1E1E',
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  clearChatText: {
+    fontFamily: theme.fontFamily,
+    fontSize: 11,
+    color: '#888',
+    fontWeight: '600',
+  },
   langToggle: {
     position: 'absolute',
     right: theme.spacing.md,

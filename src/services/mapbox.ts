@@ -185,7 +185,7 @@ export type SpendFilter = MerchantCategory | 'All';
 export const SPEND_FILTERS: SpendFilter[] = ['All', 'Dining', 'Grocery', 'Fuel', 'Electronics', 'Shopping', 'Travel', 'Pharmacy / Health', 'Entertainment'];
 
 /** Category ids to query for a filter ("All" queries the main spend types). */
-async function categoryIdsFor(filter: SpendFilter): Promise<string[]> {
+async function categoryIdsFor(filter: SpendFilter, radiusKm = 5): Promise<string[]> {
   const supported = await getSupportedCategories();
   const groups =
     filter === 'All'
@@ -196,7 +196,8 @@ async function categoryIdsFor(filter: SpendFilter): Promise<string[]> {
     const candidates = CATEGORY_CANDIDATES[g as keyof typeof CATEGORY_CANDIDATES] ?? [];
     // For "All", one id per spend type keeps the request count low.
     const usable = candidates.filter((c) => supported.has(c));
-    ids.push(...(filter === 'All' ? usable.slice(0, 1) : usable.slice(0, 3)));
+    const limit = filter === 'All' ? (radiusKm > 2 ? 2 : 1) : Math.min(5, radiusKm > 2 ? 4 : 3);
+    ids.push(...usable.slice(0, limit));
   }
   return [...new Set(ids)];
 }
@@ -215,7 +216,7 @@ async function loadNearbyPlaces(center: LatLon, filter: SpendFilter, radiusKm: n
   let places: MapPlace[] = [];
 
   try {
-    const ids = await categoryIdsFor(filter);
+    const ids = await categoryIdsFor(filter, radiusKm);
     const responses = await Promise.allSettled(
       ids.map((id) =>
         getJson(

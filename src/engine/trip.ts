@@ -18,6 +18,8 @@ export type PointsUse = {
   rupeesPerPoint: number;
   pointsUsed: number;
   valueRs: number;
+  awardTaxesRs: number;
+  netValueRs: number;
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
   source: string | null;
   verifiedAt: string | null;
@@ -35,13 +37,60 @@ export type TripPlan = {
   notes: string[];
 };
 
+export const CITY_AIRPORT_MAP: Record<string, string> = {
+  pune: 'PNQ',
+  mumbai: 'BOM',
+  bombay: 'BOM',
+  delhi: 'DEL',
+  'new delhi': 'DEL',
+  bengaluru: 'BLR',
+  bangalore: 'BLR',
+  goa: 'GOI',
+  chennai: 'MAA',
+  madras: 'MAA',
+  kolkata: 'CCU',
+  calcutta: 'CCU',
+  hyderabad: 'HYD',
+  ahmedabad: 'AMD',
+  kochi: 'COK',
+  cochin: 'COK',
+  jaipur: 'JAI',
+  lucknow: 'LKO',
+  chandigarh: 'IXC',
+  varanasi: 'VNS',
+  srinagar: 'SXR',
+  amritsar: 'ATQ',
+  dubai: 'DXB',
+  singapore: 'SIN',
+  london: 'LHR',
+  bangkok: 'BKK',
+};
+
+export function resolveAirportCode(query: string): string {
+  const clean = (query ?? '').trim().toLowerCase();
+  if (!clean) return '';
+  if (CITY_AIRPORT_MAP[clean]) return CITY_AIRPORT_MAP[clean];
+  if (/^[a-z]{3}$/i.test(clean)) return clean.toUpperCase();
+  for (const [city, code] of Object.entries(CITY_AIRPORT_MAP)) {
+    if (city.startsWith(clean) || clean.startsWith(city)) return code;
+  }
+  return clean.toUpperCase();
+}
+
 export function planTripPayment(
   catalog: Catalog,
   holdings: TripHolding[],
   fareRs: number,
-  options: { experience?: Experience; kind?: 'FLIGHT' | 'HOTEL'; today?: string; /** @deprecated ignored: monthly values cannot predict award pricing. */ monthlyRewardRs?: number } = {},
+  options: {
+    experience?: Experience;
+    kind?: 'FLIGHT' | 'HOTEL';
+    today?: string;
+    awardTaxesRs?: number;
+    /** @deprecated ignored: monthly values cannot predict award pricing. */
+    monthlyRewardRs?: number;
+  } = {},
 ): TripPlan {
-  const { experience = 'SOME', kind = 'FLIGHT', today } = options;
+  const { experience = 'SOME', kind = 'FLIGHT', today, awardTaxesRs = 0 } = options;
   const notes: string[] = [];
 
   const cashResults = holdings
@@ -61,23 +110,31 @@ export function planTripPayment(
       .map((route) => ({ h, route })))
     .sort((a, b) => b.route.rupeesPerPoint * b.h.points - a.route.rupeesPerPoint * a.h.points);
 
-  const pointsOptions: PointsUse[] = options_.map(({ h, route }) => ({
-    id: `${h.card.id}:${route.partnerId ?? route.label}`,
-    cardId: h.card.id,
-    cardName: h.card.name,
-    route: route.label,
-    rupeesPerPoint: Math.round(route.rupeesPerPoint * 100) / 100,
-    pointsUsed: h.points,
-    valueRs: Math.round(h.points * route.rupeesPerPoint),
-    confidence: route.confidence,
-    source: route.valuationSource,
-    verifiedAt: route.valuationVerifiedAt,
-    ruleSource: route.ruleSource,
-    ruleVerifiedAt: route.ruleVerifiedAt,
-    estimated: route.estimated,
-  }));
+  const pointsOptions: PointsUse[] = options_.map(({ h, route }) => {
+    const valueRs = Math.round(h.points * route.rupeesPerPoint);
+    const taxes = Math.max(0, awardTaxesRs);
+    const netValueRs = Math.max(0, valueRs - taxes);
+    return {
+      id: `${h.card.id}:${route.partnerId ?? route.label}`,
+      cardId: h.card.id,
+      cardName: h.card.name,
+      route: route.label,
+      rupeesPerPoint: Math.round(route.rupeesPerPoint * 100) / 100,
+      pointsUsed: h.points,
+      valueRs,
+      awardTaxesRs: taxes,
+      netValueRs,
+      confidence: route.confidence,
+      source: route.valuationSource,
+      verifiedAt: route.valuationVerifiedAt,
+      ruleSource: route.ruleSource,
+      ruleVerifiedAt: route.ruleVerifiedAt,
+      estimated: route.estimated,
+    };
+  });
 
   if (pointsOptions.length > 0) notes.push('These are route-specific point-value estimates, not live award prices. Check availability and the required points, taxes and fees with the programme before transferring. Balances from separate programmes are not combined.');
+  if (awardTaxesRs > 0) notes.push(`Estimated award redemption net value deducts ₹${awardTaxesRs.toLocaleString('en-IN')} in required cash taxes/carrier fees.`);
   if (pointsOptions.some((p) => p.confidence !== 'HIGH')) notes.push('At least one displayed route is based on medium- or low-confidence data; check its source and verification date.');
   if (experience === 'NEW' && pointsOptions.length > 0) notes.push('Transfers can be one-way. Do not transfer before confirming an award booking.');
   if (payCash?.usesPortal) notes.push(`Paying cash earns most when booked through ${payCash.row?.merchantsText ?? "the bank's travel portal"}.`);
@@ -87,7 +144,21 @@ export function planTripPayment(
 
 /** Skyscanner search link for the user to check real cash fares (YYMMDD date slug). */
 export function skyscannerUrl(from: string, to: string, dateIso: string, adults = 1, cabin: 'economy' | 'premiumeconomy' | 'business' | 'first' = 'economy') {
+  const fromCode = resolveAirportCode(from) || from.trim().toUpperCase();
+  const toCode = resolveAirportCode(to) || to.trim().toUpperCase();
   const [y, m, d] = dateIso.split('-');
   const slug = `${y.slice(2)}${m}${d}`;
-  return `https://www.skyscanner.co.in/transport/flights/${from.toLowerCase()}/${to.toLowerCase()}/${slug}/?adultsv2=${adults}&cabinclass=${cabin}`;
+  return `https://www.skyscanner.co.in/transport/flights/${fromCode.toLowerCase()}/${toCode.toLowerCase()}/${slug}/?adultsv2=${adults}&cabinclass=${cabin}`;
+}
+
+/** IRCTC external search URL for Indian railway train availability. */
+export function irctcSearchUrl(): string {
+  return 'https://www.irctc.co.in/nget/train-search';
+}
+
+/** redBus external search URL for intercity bus routes in India. */
+export function redbusSearchUrl(from: string, to: string): string {
+  const f = encodeURIComponent((from || 'pune').trim().toLowerCase());
+  const t = encodeURIComponent((to || 'goa').trim().toLowerCase());
+  return `https://www.redbus.in/bus-tickets/${f}-to-${t}`;
 }

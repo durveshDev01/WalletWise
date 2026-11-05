@@ -215,6 +215,10 @@ interface CardStore {
   setAuraSimple: (simple: boolean) => void;
   setLiteMode: (lite: boolean) => void;
   setIntroSeen: () => void;
+  /** Persisted recent Aura conversation turns. */
+  auraMessages?: { id: string; role: 'user' | 'assistant'; content: string; cta?: any; state?: 'streaming' | 'done' | 'error'; offline?: boolean }[];
+  setAuraMessages: (messages: { id: string; role: 'user' | 'assistant'; content: string; cta?: any; state?: 'streaming' | 'done' | 'error'; offline?: boolean }[]) => void;
+  clearAuraMessages: () => void;
   /** Points goals (optional slice, added for the Goals screen). */
   goals?: Goal[];
   addGoal: (goal: Omit<Goal, 'id' | 'createdAt'>) => void;
@@ -284,6 +288,9 @@ export const useCardStore = create<CardStore>()(
       setAuraSimple: (auraSimple) => set({ auraSimple }),
       setLiteMode: (liteMode) => set({ liteMode }),
       setIntroSeen: () => set({ introSeen: true }),
+      auraMessages: undefined,
+      setAuraMessages: (auraMessages) => set({ auraMessages }),
+      clearAuraMessages: () => set({ auraMessages: [] }),
       goals: [],
       addGoal: (goal) =>
         set((s) => ({ goals: [...(s.goals ?? []), { ...goal, id: `goal-${Date.now()}`, createdAt: new Date().toISOString().slice(0, 10) }] })),
@@ -328,6 +335,7 @@ export const useCardStore = create<CardStore>()(
         introSeen: s.introSeen,
         billRemindersOn: s.billRemindersOn,
         spends: s.spends,
+        auraMessages: s.auraMessages,
       }),
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<CardStore>;
