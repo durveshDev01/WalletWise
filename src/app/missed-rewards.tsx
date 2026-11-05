@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
@@ -34,7 +34,27 @@ export default function MissedRewardsScreen() {
   const walletCards = holdings.map((h) => catalog.byId.get(h.catalogId)).filter((c): c is Card => !!c);
   const firstCard = walletCards[0]?.id ?? '';
 
-  const [spends, setSpends] = useState<SpendDraft[]>([{ amount: '', category: 'GROCERY', merchant: '', online: 'NO', usedCardId: firstCard }]);
+  const eligibleLedgerSpends = useMemo(() => {
+    return ledger.filter((spend) => !spend.paymentMode || spend.paymentMode === 'CARD').flatMap((spend) => {
+      const holding = holdings.find((h) => h.id === spend.cardId);
+      return holding && walletCards.some((card) => card.id === holding.catalogId)
+        ? [{
+            amount: String(spend.amount),
+            category: spend.category,
+            merchant: '',
+            online: (spend.online ? 'YES' : 'NO') as 'YES' | 'NO',
+            usedCardId: holding.catalogId,
+          }]
+        : [];
+    });
+  }, [ledger, holdings, walletCards]);
+
+  const [spends, setSpends] = useState<SpendDraft[]>(() => {
+    if (eligibleLedgerSpends.length > 0) {
+      return eligibleLedgerSpends;
+    }
+    return [{ amount: '', category: 'GROCERY', merchant: '', online: 'NO', usedCardId: firstCard }];
+  });
   const [checked, setChecked] = useState(false);
   const update = (i: number, changes: Partial<SpendDraft>) => {
     setChecked(false);
@@ -64,13 +84,34 @@ export default function MissedRewardsScreen() {
       sub={`Enter recent spends and the card you used. We compare eligible cards in your wallet; ties are shown as ties.`}
     >
       {sampleWallet && <Body style={styles.small}>This wallet includes sample comparison cards. Remove the samples in Wallet before relying on a real-wallet comparison.</Body>}
-      {ledger.some((spend) => !spend.paymentMode || spend.paymentMode === 'CARD') && <LinkButton label="Load eligible credit-card spends from my ledger" onPress={() => {
-        const rows = ledger.filter((spend) => !spend.paymentMode || spend.paymentMode === 'CARD').flatMap((spend) => {
-          const holding = holdings.find((h) => h.id === spend.cardId);
-          return holding && walletCards.some((card) => card.id === holding.catalogId) ? [{ amount: String(spend.amount), category: spend.category, merchant: '', online: spend.online ? 'YES' as const : 'NO' as const, usedCardId: holding.catalogId }] : [];
-        });
-        if (rows.length) { setSpends(rows); setChecked(false); }
-      }} />}
+      {eligibleLedgerSpends.length > 0 && spends === eligibleLedgerSpends && (
+        <View style={styles.ledgerInfoRow}>
+          <Text style={styles.ledgerInfoText}>
+            💡 Loaded {spends.length} credit card spend{spends.length === 1 ? '' : 's'} from your spend ledger.
+          </Text>
+          <Pressable
+            onPress={() => {
+              setSpends([{ amount: '', category: 'GROCERY', merchant: '', online: 'NO', usedCardId: firstCard }]);
+              setChecked(false);
+            }}
+            accessibilityRole="button"
+          >
+            <Text style={styles.ledgerResetText}>Clear / Enter manually</Text>
+          </Pressable>
+        </View>
+      )}
+      {eligibleLedgerSpends.length > 0 && spends !== eligibleLedgerSpends && (
+        <Pressable
+          onPress={() => {
+            setSpends(eligibleLedgerSpends);
+            setChecked(false);
+          }}
+          accessibilityRole="button"
+          style={{ marginBottom: 12, alignSelf: 'flex-start' }}
+        >
+          <Text style={styles.ledgerResetText}>↻ Reload spends from ledger</Text>
+        </Pressable>
+      )}
       {spends.map((s, i) => (
         <Panel key={i}>
           <View style={styles.spendTop}>
@@ -187,4 +228,31 @@ const styles = StyleSheet.create({
   },
   hint: { ...theme.text.caption, fontWeight: '400', marginTop: 4 },
   disclaimer: { ...theme.text.caption, fontWeight: '400', marginTop: theme.spacing.lg, lineHeight: 17 },
+  ledgerInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#161616',
+    borderWidth: 1,
+    borderColor: '#262626',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  ledgerInfoText: {
+    fontFamily: theme.fontFamily,
+    color: '#D4AF37',
+    fontSize: 12,
+    fontWeight: '600',
+    flex: 1,
+  },
+  ledgerResetText: {
+    fontFamily: theme.fontFamily,
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
 });
