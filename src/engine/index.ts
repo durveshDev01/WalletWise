@@ -52,3 +52,5 @@ export type { GoalProgress, GoalCardProgress, RedemptionCheck, RedemptionBand } 
 export { missedRewards } from './missed';
 export type { PastSpend, MissedSpend, MissedRewards } from './missed';
 export { daysUntilDue, upcomingDueDates, ordinalDay } from './billing';
+export { spendTrends } from './budget';
+export type { SpendTrend } from './budget';

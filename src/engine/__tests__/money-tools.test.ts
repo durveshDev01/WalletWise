@@ -393,3 +393,42 @@ describe('planTripPayment and transport handoffs', () => {
     assert.ok(planWithTaxes.notes.some((n) => n.includes('taxes/carrier fees')));
   });
 });
+
+// ── Point 6: Core money verification suite ──────────────
+describe('core money edge cases & verification', () => {
+  it('applies 18% GST to revolving debt interest charges', () => {
+    const cost = revolvingCost({ balance: 10000, aprMonthlyPct: 3.5, maxMonths: 1 });
+    assert.ok(cost.totalInterest > 0);
+    assert.equal(cost.totalGst, Math.round(cost.totalInterest * 0.18));
+    assert.equal(cost.extraCost, cost.totalInterest + cost.totalGst);
+  });
+
+  it('handles ties honestly in card recommendations', () => {
+    const cardA = card({ id: 'cardA', rewards: [row({ category: 'DEFAULT', ratePct: 2 })] });
+    const cardB = card({ id: 'cardB', rewards: [row({ category: 'DEFAULT', ratePct: 2 })] });
+    const cat = fixtureCatalog([cardA, cardB]);
+
+    const res = missedRewards(
+      cat,
+      [cardA, cardB],
+      [{ amount: 1000, category: 'ONLINE_SHOPPING', usedCardId: 'cardA' }],
+      { today: TODAY },
+    );
+    assert.equal(res.rows[0].missed, 0);
+  });
+
+  it('keeps cashback and points strictly separated in goal tracking', () => {
+    const cashCard = card({ id: 'cashCard', rewards: [row({ category: 'DEFAULT', ratePct: 5, type: 'CASHBACK' })] });
+    const pointsCard = card({ id: 'pointsCard', rewards: [row({ category: 'DEFAULT', ratePct: 2, type: 'REWARD_POINTS', pointPaisa: 50 })] });
+    const cat = fixtureCatalog([cashCard, pointsCard]);
+
+    const goal = goalProgress(
+      cat,
+      10000,
+      [{ cardId: 'cashCard', points: 5000 }, { cardId: 'pointsCard', points: 10000 }],
+    );
+    assert.ok(goal.perCard.length === 2);
+    assert.equal(goal.perCard[0].cardId, 'cashCard');
+    assert.equal(goal.perCard[1].cardId, 'pointsCard');
+  });
+});
