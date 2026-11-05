@@ -424,7 +424,7 @@ export default function WalletScreen() {
           </View>
         </View>
 
-        {isDemo && (
+        {isDemo && cards.length > 0 && (
           <View style={styles.demoBanner}>
             <Text style={styles.demoTitle}>Sample cards are included</Text>
             <Text style={styles.demoText}>They remain alongside cards you add, as a comparison set. Remove them any time below.</Text>
@@ -432,44 +432,68 @@ export default function WalletScreen() {
             <Pressable onPress={removeSampleCards} accessibilityRole="button" accessibilityLabel="Remove sample cards"><Text style={styles.demoText}>Remove sample cards</Text></Pressable>
           </View>
         )}
-        {cards.length === 0 && (
-          <Pressable style={styles.demoBanner} onPress={() => router.push('/add-card')}>
-            <Text style={styles.demoTitle}>No cards yet</Text>
-            <Text style={styles.demoText}>Add the cards you hold, or use Find My Card if you have none. Tap to add →</Text>
-          </Pressable>
+
+        {cards.length === 0 ? (
+          <View style={styles.emptyWalletCard}>
+            <View style={styles.emptyWalletIconCircle}>
+              <Text style={{ fontSize: 36 }}>💳</Text>
+            </View>
+            <Text style={styles.emptyWalletTitle}>Your Wallet is Empty</Text>
+            <Text style={styles.emptyWalletSubtitle}>
+              Add the credit cards you currently hold to unlock personalized rewards calculations, statement due alerts, and swipe recommendations.
+            </Text>
+            <Pressable
+              style={styles.addFirstCardButton}
+              onPress={() => router.push('/add-card')}
+              accessibilityRole="button"
+              accessibilityLabel="Add your first card"
+            >
+              <Text style={styles.addFirstCardButtonText}>+ Add Your First Card</Text>
+            </Pressable>
+            <Pressable
+              style={styles.findCardLink}
+              onPress={() => router.push('/find-card')}
+              accessibilityRole="button"
+            >
+              <Text style={styles.findCardLinkText}>Don't have a card yet? Find your best card →</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <>
+            {/* Card Deck (Immediately below header) */}
+            <GestureDetector gesture={panGesture}>
+              <Animated.View style={[styles.deckContainer, deckAnimatedStyle]}>
+                {cards.map((card, i) => (
+                  <StackedCard
+                    key={card.id}
+                    card={card}
+                    index={i}
+                    dragProgress={dragProgress}
+                    totalCards={cards.length}
+                    selectedIndex={selectedIndex}
+                    onPress={() => handleCardPress(i)}
+                  />
+                ))}
+              </Animated.View>
+            </GestureDetector>
+
+            {/* Interaction Hint (Below deck) */}
+            <Animated.View style={[styles.hintPill, hintAnimatedStyle]}>
+              <View style={styles.hintIconWrapper}>
+                <Text style={styles.hintIcon}>💳</Text>
+              </View>
+              <Text style={styles.hintText}>
+                Swipe down to browse all cards. Swipe up to stack cards. Tap a card to open details.
+              </Text>
+            </Animated.View>
+
+            {/* Rest of the Info (Below hint) */}
+            <Text style={styles.sectionTitle}>Your reward balances</Text>
+            <ExpiryBanner cards={cards} />
+            <PointsValueCard cards={cards} totalMin={totalMin} totalMax={totalMax} />
+          </>
         )}
 
-        {/* Card Deck (Immediately below header) */}
-        <GestureDetector gesture={panGesture}>
-          <Animated.View style={[styles.deckContainer, deckAnimatedStyle]}>
-            {cards.map((card, i) => (
-              <StackedCard
-                key={card.id}
-                card={card}
-                index={i}
-                dragProgress={dragProgress}
-                totalCards={cards.length}
-                selectedIndex={selectedIndex}
-                onPress={() => handleCardPress(i)}
-              />
-            ))}
-          </Animated.View>
-        </GestureDetector>
-
-        {/* Interaction Hint (Below deck) */}
-        <Animated.View style={[styles.hintPill, hintAnimatedStyle]}>
-          <View style={styles.hintIconWrapper}>
-            <Text style={styles.hintIcon}>💳</Text>
-          </View>
-          <Text style={styles.hintText}>
-            Swipe down to browse all cards. Swipe up to stack cards. Tap a card to open details.
-          </Text>
-        </Animated.View>
-
-        {/* Rest of the Info (Below hint) */}
-        <Text style={styles.sectionTitle}>Your reward balances</Text>
-        <ExpiryBanner cards={cards} />
-        <PointsValueCard cards={cards} totalMin={totalMin} totalMax={totalMax} />
         <WalletMoneyLinks />
 
       </ScrollView>
@@ -497,6 +521,70 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 24,
+  },
+
+  // Empty Wallet
+  emptyWalletCard: {
+    backgroundColor: '#121212',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#242424',
+    padding: 28,
+    alignItems: 'center',
+    marginTop: 12,
+    marginBottom: 24,
+  },
+  emptyWalletIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(245, 208, 111, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 208, 111, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
+  },
+  emptyWalletTitle: {
+    fontFamily: typography.fontFamily,
+    color: '#F5F5F5',
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptyWalletSubtitle: {
+    fontFamily: typography.fontFamily,
+    color: '#9A9A9A',
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  addFirstCardButton: {
+    backgroundColor: colors.accent.goldStart,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addFirstCardButtonText: {
+    fontFamily: typography.fontFamily,
+    color: '#0A0A0A',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  findCardLink: {
+    marginTop: 16,
+    paddingVertical: 6,
+  },
+  findCardLinkText: {
+    fontFamily: typography.fontFamily,
+    color: colors.accent.goldStart,
+    fontSize: 13,
+    fontWeight: '600',
   },
 
   // Header
