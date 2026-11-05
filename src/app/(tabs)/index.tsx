@@ -63,8 +63,8 @@ export default function HomeScreen() {
       { key: 'trip', title: 'Trip Planner', icon: 'plane', onPress: () => router.push('/trip-planner') },
       { key: 'nearby', title: 'Best Card Nearby', icon: 'pin', onPress: () => router.push('/map') },
       { key: 'add', title: 'Add a Card', icon: 'plus', onPress: () => router.push('/add-card') },
-      { key: 'bill', title: 'Bill check', icon: 'rupee', onPress: () => router.push('/bill-check') },
-      { key: 'browse', title: 'Browse cards', icon: 'search', onPress: () => router.push('/browse-cards') },
+      { key: 'bill', title: 'Bill Check', icon: 'rupee', onPress: () => router.push('/bill-check') },
+      { key: 'browse', title: 'Browse Cards', icon: 'search', onPress: () => router.push('/browse-cards') },
     ],
     [router],
   );
@@ -74,7 +74,7 @@ export default function HomeScreen() {
       <HomeHeader
         topInset={insets.top}
         hasAlerts={hasAlerts}
-        onAlerts={() => router.push({ pathname: '/aura', params: { q: 'Any changes to my cards?' } })}
+        onAlerts={() => router.push('/notifications')}
         onSettings={() => router.push('/settings')}
       />
 
@@ -137,4 +137,3 @@ const styles = StyleSheet.create({
   },
   fullBleed: { marginHorizontal: -theme.spacing.md },
 });
-

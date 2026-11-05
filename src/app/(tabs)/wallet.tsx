@@ -375,9 +375,14 @@ export default function WalletScreen() {
               Points worth: <Text style={{ color: colors.accent.goldStart }}>₹{totalMin.toLocaleString('en-IN')} – ₹{totalMax.toLocaleString('en-IN')}</Text>
             </Text>
           </View>
-          <Pressable style={styles.plusButton} onPress={() => router.push('/add-card')}>
-            <Text style={styles.plusButtonText}>+</Text>
-          </Pressable>
+          <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+            <Pressable style={styles.plusButton} onPress={() => router.push('/settings')} accessibilityLabel="Settings">
+              <Text style={{ fontSize: 18, color: colors.accent.goldStart }}>⚙</Text>
+            </Pressable>
+            <Pressable style={styles.plusButton} onPress={() => router.push('/add-card')} accessibilityLabel="Add card">
+              <Text style={styles.plusButtonText}>+</Text>
+            </Pressable>
+          </View>
         </View>
 
         {isDemo && (

@@ -457,6 +457,16 @@ export default function MapScreen() {
         )}
       </View>
 
+      {/* SETTINGS */}
+      <Pressable
+        onPress={() => router.push('/settings')}
+        accessibilityRole="button"
+        accessibilityLabel="Settings"
+        style={({ pressed }) => [styles.locateButton, { top: insets.top + theme.spacing.sm }, pressed && styles.pressed]}
+      >
+        <Icon name="settings" color={theme.colors.gold} size={theme.sizes.icon} />
+      </Pressable>
+
       {/* MY LOCATION */}
       <Pressable
         onPress={goToMyLocation}
