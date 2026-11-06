@@ -131,3 +131,25 @@ export function dateInDays(days: number, from: Date = new Date()): string {
   return localIsoDate(d);
 }
 
+/**
+ * Computes the points expiry date for a card given its policy and the date points were earned.
+ * Returns null when the policy says points never expire.
+ *
+ * @param policy  - The card's `pointsExpiry` block from the catalog.
+ * @param earnedAt - ISO date (YYYY-MM-DD) when the balance was last recorded (approximated as today for existing points).
+ */
+export function computePointsExpiryDate(
+  policy: { neverExpires: boolean; validityMonths: number | null; alignToMonthEnd: boolean } | undefined | null,
+  earnedAt: Date = new Date(),
+): string | null {
+  if (!policy || policy.neverExpires || policy.validityMonths == null) return null;
+  // Add validityMonths to the earnedAt date
+  const expiry = new Date(earnedAt.getFullYear(), earnedAt.getMonth() + policy.validityMonths, earnedAt.getDate());
+  if (policy.alignToMonthEnd) {
+    // Last day of the target month
+    const lastDay = new Date(expiry.getFullYear(), expiry.getMonth() + 1, 0);
+    return localIsoDate(lastDay);
+  }
+  return localIsoDate(expiry);
+}
+

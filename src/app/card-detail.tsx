@@ -422,19 +422,41 @@ export default function CardDetailScreen() {
                 <TextInput value={lastFourText} onChangeText={setLastFourText} keyboardType="number-pad" maxLength={4} style={s.editInput} placeholder="Last 4 digits" placeholderTextColor="#555" keyboardAppearance="dark" />
                 <TextInput value={statementDayText} onChangeText={setStatementDayText} keyboardType="number-pad" maxLength={2} style={s.editInput} placeholder="Statement day (1–31, optional)" placeholderTextColor="#555" keyboardAppearance="dark" />
                 <TextInput value={dueDayText} onChangeText={setDueDayText} keyboardType="number-pad" maxLength={2} style={s.editInput} placeholder="Due day (1–31, for reminders)" placeholderTextColor="#555" keyboardAppearance="dark" />
-                <TextInput value={expiryDaysText} onChangeText={setExpiryDaysText} style={s.editInput} placeholder="Points expire in (days or YYYY-MM-DD, optional)" placeholderTextColor="#555" keyboardAppearance="dark" />
+                <TextInput
+                  value={expiryDaysText}
+                  onChangeText={setExpiryDaysText}
+                  style={s.editInput}
+                  placeholder={
+                    card.pointsExpiry?.neverExpires
+                      ? 'Points never expire'
+                      : card.pointsExpiry?.validityMonths
+                      ? `Expiry (default: ${card.pointsExpiry.validityMonths}m, or YYYY-MM-DD)`
+                      : 'Points expire in (days or YYYY-MM-DD, optional)'
+                  }
+                  placeholderTextColor="#555"
+                  keyboardAppearance="dark"
+                />
                 <Text style={s.statsValue}>Copy the balance and dates from your latest statement or bank app.</Text>
               </View>
             ) : (
               <View>
                 <Text style={s.pointsNumerals}>{card.points.toLocaleString('en-IN')}</Text>
-                {card.expiryDays != null && (
-                  <Text style={[s.statsValue, { color: '#E06D53', marginTop: 4 }]}>
+                {card.pointsExpiry?.neverExpires ? (
+                  <Text style={[s.statsValue, { color: '#54C78A', marginTop: 4 }]}>
+                    ✨ Points never expire
+                  </Text>
+                ) : card.expiryDays != null ? (
+                  <Text style={[s.statsValue, { color: card.expiryDays <= 30 ? '#E06D53' : '#9A9A9A', marginTop: 4 }]}>
                     {card.expiryDays === 0
                       ? '⚠️ Points expire today'
                       : card.expiryDays === 1
                       ? '⚠️ Points expire tomorrow'
-                      : `⚠️ Points expire in ${card.expiryDays} days${card.expiryDate ? ` (${card.expiryDate})` : ''}`}
+                      : `${card.expiryDays <= 30 ? '⚠️ ' : ''}Points expire in ${card.expiryDays} days${card.expiryDate ? ` (${card.expiryDate})` : ''}`}
+                  </Text>
+                ) : null}
+                {!!card.pointsExpiry?.note && (
+                  <Text style={[s.statsValue, { color: '#777', fontSize: 11, marginTop: 2 }]}>
+                    {card.pointsExpiry.note}
                   </Text>
                 )}
               </View>

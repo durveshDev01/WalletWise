@@ -5,6 +5,7 @@ import { describe, it } from 'node:test';
 import {
   billDateInMonth,
   billReminders,
+  computePointsExpiryDate,
   dateInDays,
   daysInMonth,
   daysUntilDue,
@@ -169,4 +170,38 @@ describe('daysUntilExpiry and dateInDays', () => {
     assert.equal(dateInDays(0, from), '2026-11-05');
   });
 });
+
+describe('computePointsExpiryDate', () => {
+  it('returns null when policy specifies neverExpires', () => {
+    assert.equal(computePointsExpiryDate({ neverExpires: true, validityMonths: null, alignToMonthEnd: false }), null);
+    assert.equal(computePointsExpiryDate(null), null);
+    assert.equal(computePointsExpiryDate(undefined), null);
+  });
+
+  it('computes exact expiry date when not aligned to month end', () => {
+    const from = day(2026, 1, 15);
+    // 36 months from Jan 15, 2026 -> Jan 15, 2029
+    assert.equal(
+      computePointsExpiryDate({ neverExpires: false, validityMonths: 36, alignToMonthEnd: false }, from),
+      '2029-01-15',
+    );
+  });
+
+  it('aligns to the last day of the expiry month (SBI style)', () => {
+    const from = day(2026, 1, 5);
+    // 24 months from Jan 5, 2026 -> Jan 2028, last day of Jan is 31
+    assert.equal(
+      computePointsExpiryDate({ neverExpires: false, validityMonths: 24, alignToMonthEnd: true }, from),
+      '2028-01-31',
+    );
+
+    const fromFeb = day(2026, 2, 10);
+    // 24 months from Feb 10, 2026 -> Feb 2028 (leap year), last day is 29
+    assert.equal(
+      computePointsExpiryDate({ neverExpires: false, validityMonths: 24, alignToMonthEnd: true }, fromFeb),
+      '2028-02-29',
+    );
+  });
+});
+
 

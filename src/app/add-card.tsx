@@ -144,17 +144,27 @@ export default function AddCardScreen() {
 
         {!isCashback && (
           <>
-            <Text style={styles.label}>POINTS EXPIRY (OPTIONAL, DAYS OR YYYY-MM-DD)</Text>
+            <Text style={styles.label}>POINTS EXPIRY (OPTIONAL)</Text>
             <TextInput
               value={expiryText}
               onChangeText={setExpiryText}
-              placeholder="e.g. 30 (or 2026-12-31)"
+              placeholder={
+                picked?.pointsExpiry?.neverExpires
+                  ? 'Points never expire (leave empty)'
+                  : picked?.pointsExpiry?.validityMonths
+                  ? `Default: ${picked.pointsExpiry.validityMonths} months from today`
+                  : 'e.g. 30 (or 2026-12-31)'
+              }
               placeholderTextColor="#555"
               style={styles.input}
               keyboardAppearance="dark"
               accessibilityLabel="Points expiry in days or YYYY-MM-DD format"
             />
-            <Text style={styles.hint}>WalletWise warns you before reward points expire so you never lose accumulated value.</Text>
+            <Text style={styles.hint}>
+              {picked?.pointsExpiry?.note
+                ? `Rule: ${picked.pointsExpiry.note}`
+                : 'WalletWise warns you before reward points expire so you never lose accumulated value.'}
+            </Text>
           </>
         )}
 

@@ -4,6 +4,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { catalog } from '../data/catalog';
 import {
   CATEGORY_LABELS,
+  computePointsExpiryDate,
   dateInDays,
   daysUntilExpiry,
   devaluationRisk,
@@ -44,6 +45,7 @@ export type CardData = {
   milestones: string[];
   rewardCategories: string[];
   loungeAccess: string;
+  pointsExpiry?: Card['pointsExpiry'];
   intelligence: {
     bestFor: string;
     bestCategory: string;
@@ -140,6 +142,9 @@ export function toCardData(h: Holding): CardData {
   if (!expiryDate && h.id === '2' && isSampleHolding(h)) {
     expiryDate = dateInDays(18);
   }
+  if (!expiryDate && card.pointsExpiry && !card.pointsExpiry.neverExpires) {
+    expiryDate = computePointsExpiryDate(card.pointsExpiry) ?? undefined;
+  }
   const expiryDays = expiryDate ? daysUntilExpiry(expiryDate) ?? undefined : h.expiryDays;
 
   return {
@@ -177,6 +182,7 @@ export function toCardData(h: Holding): CardData {
     milestones: card.perks.includes('MILESTONE_BONUS') ? ['Milestone bonuses on yearly spend (check current issuer terms)'] : [],
     rewardCategories: [...new Set(card.rewards.filter((r) => r.category !== 'DEFAULT').map((r) => CATEGORY_LABELS[r.category]))],
     loungeAccess: loungeText(card),
+    pointsExpiry: card.pointsExpiry,
     intelligence: {
       bestFor: top?.label ?? 'Everyday spends',
       bestCategory: top?.detail ?? 'Everyday spends',
@@ -282,6 +288,12 @@ export const useCardStore = create<CardStore>()(
           let extra = { ...billDays };
           if (extra.expiryDays != null && extra.expiryDays > 0 && !extra.expiryDate) {
             extra.expiryDate = dateInDays(extra.expiryDays);
+          } else if (!extra.expiryDate) {
+            const cat = catalog.byId.get(catalogId);
+            if (cat?.pointsExpiry && !cat.pointsExpiry.neverExpires) {
+              const autoExp = computePointsExpiryDate(cat.pointsExpiry);
+              if (autoExp) extra.expiryDate = autoExp;
+            }
           }
           // Keep samples visible until the user explicitly removes them.
           const holdings = [...s.holdings, { ...newHolding(catalogId, lastFour, points), ...extra }];
@@ -294,6 +306,12 @@ export const useCardStore = create<CardStore>()(
             const updated = { ...h, ...changes };
             if (updated.expiryDays != null && updated.expiryDays > 0 && !changes.expiryDate) {
               updated.expiryDate = dateInDays(updated.expiryDays);
+            } else if (changes.points != null && !changes.expiryDate && !h.expiryDate) {
+              const cat = catalog.byId.get(h.catalogId);
+              if (cat?.pointsExpiry && !cat.pointsExpiry.neverExpires) {
+                const autoExp = computePointsExpiryDate(cat.pointsExpiry);
+                if (autoExp) updated.expiryDate = autoExp;
+              }
             }
             return updated;
           });
