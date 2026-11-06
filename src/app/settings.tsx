@@ -136,7 +136,13 @@ export default function SettingsScreen() {
       const emailRedirectTo = Platform.OS === 'web' ? `${window.location.origin}/settings` : Linking.createURL('settings');
       const { error } = await supabase.auth.signInWithOtp({ email: email.trim(), options: { shouldCreateUser: true, emailRedirectTo } });
       if (error) {
-        setSyncMessage(error.message);
+        const isRate = error.message.toLowerCase().includes('rate') || (error as any).status === 429;
+        if (isRate) {
+          setSyncMessage('Supabase security rate limit reached. Please wait 60 seconds before requesting another sign-in link.');
+          startCooldown(60);
+        } else {
+          setSyncMessage(error.message);
+        }
       } else {
         setSyncMessage('Check your email and tap the sign-in link on this device.');
         startCooldown(60);
@@ -176,7 +182,7 @@ export default function SettingsScreen() {
       if (!result || typeof result.snapshot !== 'object' || !result.snapshot) { setSyncMessage('No encrypted cloud backup found for this account.'); return; }
       const saved = result.snapshot;
       const applyRestore = () => {
-        useCardStore.setState(saved as Partial<ReturnType<typeof useCardStore.getState>>);
+        useCardStore.getState().restoreSnapshot(saved as Record<string, unknown>);
         setSyncMessage('Cloud backup restored to this device.');
       };
       if (Platform.OS === 'web') {

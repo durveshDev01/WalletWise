@@ -23,7 +23,11 @@ export const config = {
   /** Which LLM implementation to use. Only "groq" exists today. */
   llmProvider: str(process.env.LLM_PROVIDER, 'groq').toLowerCase(),
   groqApiKey: str(process.env.GROQ_API_KEY),
-  groqModel: str(process.env.GROQ_MODEL),
+  groqModel: (() => {
+    const m = str(process.env.GROQ_MODEL);
+    // If unset or set to discontinued / restricted llama-3.3-70b-versatile, use the active tool-calling model
+    return (!m || m === 'llama-3.3-70b-versatile') ? 'openai/gpt-oss-120b' : m;
+  })(),
   temperature: 0.1,
   /** Retries after a rate limit (429), timeout or 5xx, with exponential backoff. */
   llmMaxRetries: 2,

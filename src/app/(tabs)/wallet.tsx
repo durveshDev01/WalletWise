@@ -158,6 +158,29 @@ function PointsValueCard({ cards, totalMin, totalMax, explainText }: { cards: Ca
                     <Text style={styles.programmeBalance}>
                       {c.points.toLocaleString('en-IN')} {c.currencyName} ≈ ₹{c.lowValue.toLocaleString('en-IN')}{c.highValue > c.lowValue ? ` – ₹${c.highValue.toLocaleString('en-IN')}` : ''}
                     </Text>
+                    {/* Expiry timeline */}
+                    {c.pointsExpiry?.neverExpires ? (
+                      <Text style={[styles.programmeDetail, { color: '#54C78A', fontWeight: '600' }]}>
+                        ✨ Points never expire
+                      </Text>
+                    ) : c.expiryDays != null ? (
+                      <Text style={[styles.programmeDetail, { color: c.expiryDays <= 30 ? colors.accent.danger : '#F5D06F', fontWeight: '600' }]}>
+                        {c.expiryDays === 0
+                          ? '🚨 Points expire today!'
+                          : c.expiryDays === 1
+                          ? '🚨 Points expire tomorrow!'
+                          : `⏳ Points expire in ${c.expiryDays} days${c.expiryDate ? ` (${c.expiryDate})` : ''}`}
+                      </Text>
+                    ) : c.expiryDate ? (
+                      <Text style={[styles.programmeDetail, { color: '#F5D06F' }]}>
+                        ⏳ Points expire: {c.expiryDate}
+                      </Text>
+                    ) : null}
+                    {!!c.pointsExpiry?.note && !c.pointsExpiry.neverExpires && (
+                      <Text style={[styles.programmeDetail, { color: '#888888', fontSize: 10 }]}>
+                        Rule: {c.pointsExpiry.note}
+                      </Text>
+                    )}
                     <View style={{ marginTop: 4, gap: 2 }}>
                       {avenues.map((av, idx) => (
                         <Text key={idx} style={styles.programmeDetail}>
@@ -513,8 +536,8 @@ export default function WalletScreen() {
             </Animated.View>
 
             {/* Rest of the Info (Below hint) */}
-            <Text style={styles.sectionTitle}>{t.rewardBalances}</Text>
             <ExpiryBanner cards={cards} />
+            <Text style={styles.sectionTitle}>{t.rewardBalances}</Text>
             <PointsValueCard cards={cards} totalMin={totalMin} totalMax={totalMax} explainText={t.valueExplain} />
           </>
         )}

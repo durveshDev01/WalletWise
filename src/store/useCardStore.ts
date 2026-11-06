@@ -255,6 +255,8 @@ interface CardStore {
   removeSpend: (id: string) => void;
   /** Adds cards from a "Share my wallet" code. The first real cards replace the demo wallet. */
   importCards: (cards: { catalogId: string; lastFour: string; points: number }[]) => void;
+  /** Restores a full wallet state from an encrypted cloud backup and recalculates cards. */
+  restoreSnapshot: (saved: Record<string, unknown>) => void;
 }
 
 const derive = (holdings: Holding[]) => holdings.flatMap((h) => (catalog.byId.has(h.catalogId) ? [toCardData(h)] : []));
@@ -323,6 +325,18 @@ export const useCardStore = create<CardStore>()(
           return { holdings, cards: derive(holdings) };
         }),
       clearDemo: () => set({ holdings: [], cards: [], isDemo: false }),
+      restoreSnapshot: (saved) =>
+        set((current) => {
+          const snapshot = (saved ?? {}) as Partial<CardStore>;
+          const holdings = (Array.isArray(snapshot.holdings) ? snapshot.holdings : current.holdings) as Holding[];
+          return {
+            ...current,
+            ...snapshot,
+            holdings,
+            cards: derive(holdings),
+            isDemo: snapshot.isDemo ?? false,
+          };
+        }),
       removeSampleCards: () => set((s) => {
         const sampleIds = new Set(DEMO_HOLDINGS.map((h) => h.id));
         const holdings = s.holdings.filter((h) => !sampleIds.has(h.id));

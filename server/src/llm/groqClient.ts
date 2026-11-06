@@ -50,7 +50,30 @@ export class GroqClient implements LLMClient {
         options.signal,
       );
     } catch (error) {
-      throw mapError(error);
+      if (error instanceof NotFoundError && this.model !== 'openai/gpt-oss-120b') {
+        // Fallback to active model if configured model name is deprecated or missing
+        try {
+          stream = await this.client.chat.completions.create(
+            {
+              model: 'openai/gpt-oss-120b',
+              messages: messages.map(toGroqMessage),
+              temperature: config.temperature,
+              stream: true,
+              ...(tools.length > 0
+                ? {
+                    tools: tools.map((t) => ({ type: 'function' as const, function: { name: t.name, description: t.description, parameters: t.parameters } })),
+                    tool_choice: options.toolChoice ?? 'auto',
+                  }
+                : {}),
+            },
+            { signal: options.signal },
+          );
+        } catch (innerErr) {
+          throw mapError(innerErr);
+        }
+      } else {
+        throw mapError(error);
+      }
     }
 
     // Tool calls arrive in pieces (by index) and are only complete at the end of the stream.
