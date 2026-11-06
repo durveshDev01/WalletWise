@@ -198,6 +198,131 @@ function PointsValueCard({ cards, totalMin, totalMax }: { cards: CardData[]; tot
 }
 
 // ─────────────────────────────────────────────
+// Award Pooling Card (Black + Gold Theme) — Multi-card programme aggregation
+// ─────────────────────────────────────────────
+function AwardPoolingCard({ cards }: { cards: CardData[] }) {
+  const router = useRouter();
+
+  const pools = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        programme: string;
+        bank: string;
+        cards: CardData[];
+        totalPoints: number;
+        totalMin: number;
+        totalMax: number;
+        isCashback: boolean;
+      }
+    >();
+
+    for (const c of cards) {
+      const isCashback = c.currencyName.toLowerCase().includes('cashback');
+      const prog = isCashback ? 'Cashback' : c.currencyName;
+      const key = isCashback ? `${c.bankName}-Cashback` : `${c.bankName}-${prog}`;
+
+      const existing = map.get(key);
+      if (existing) {
+        existing.cards.push(c);
+        existing.totalPoints += c.points;
+        existing.totalMin += c.lowValue;
+        existing.totalMax += c.highValue;
+      } else {
+        map.set(key, {
+          programme: prog,
+          bank: c.bankName,
+          cards: [c],
+          totalPoints: c.points,
+          totalMin: c.lowValue,
+          totalMax: c.highValue,
+          isCashback,
+        });
+      }
+    }
+
+    return Array.from(map.values()).sort((a, b) => b.cards.length - a.cards.length);
+  }, [cards]);
+
+  if (cards.length === 0) return null;
+
+  return (
+    <View style={[styles.infoCard, { marginTop: 16 }]}>
+      <View style={styles.poolHeaderRow}>
+        <View style={styles.poolIconWrapper}>
+          <Text style={{ fontSize: 16 }}>🔄</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.infoLabel}>AWARD POOLING & TRANSFER GROUPS</Text>
+          <Text style={styles.poolHeaderSub}>
+            Combine points across cards from the same bank to unlock higher reward tiers
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.poolList}>
+        {pools.map((p, idx) => {
+          const isMulti = p.cards.length > 1;
+          return (
+            <View key={idx} style={[styles.poolCard, isMulti && styles.poolCardMulti]}>
+              <View style={styles.poolTopRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.poolProgrammeName}>
+                    {p.bank} · {p.programme}
+                  </Text>
+                  <Text style={styles.poolCardCount}>
+                    {p.cards.length} {p.cards.length === 1 ? 'card' : 'cards linked in this programme'}
+                  </Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={styles.poolPointsTotal}>
+                    {p.totalPoints.toLocaleString('en-IN')} {p.isCashback ? '₹' : 'pts'}
+                  </Text>
+                  <Text style={styles.poolValueEstimate}>
+                    ≈ ₹{p.totalMin.toLocaleString('en-IN')}{p.totalMax > p.totalMin ? ` – ₹${p.totalMax.toLocaleString('en-IN')}` : ''}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.poolMemberBadges}>
+                {p.cards.map((c) => (
+                  <Pressable
+                    key={c.id}
+                    onPress={() => router.push({ pathname: '/card-detail', params: { id: c.id, tab: 'Redeem' } })}
+                    style={styles.poolCardBadge}
+                  >
+                    <Text style={styles.poolCardBadgeText}>
+                      {c.cardName} (••{c.lastFour || '••'}) · {c.points.toLocaleString('en-IN')}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <View style={styles.poolStatusBox}>
+                <Text style={styles.poolStatusTitle}>
+                  {p.isCashback
+                    ? '💵 Statement Credit / Direct Cashback'
+                    : isMulti
+                    ? '✅ Shared Customer Pool'
+                    : '🔒 Single Card Account'}
+                </Text>
+                <Text style={styles.poolStatusDesc}>
+                  {p.isCashback
+                    ? 'Cashback is credited automatically to each card statement.'
+                    : isMulti
+                    ? 'Points from these cards can be pooled on the bank portal / netbanking for larger flight & hotel redemptions.'
+                    : 'Add more cards from this issuer to pool points towards common travel milestones.'}
+                </Text>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────
 // Individual Stacked Card
 // ─────────────────────────────────────────────
 function StackedCard({
@@ -502,6 +627,7 @@ export default function WalletScreen() {
             <Text style={styles.sectionTitle}>Your reward balances</Text>
             <ExpiryBanner cards={cards} />
             <PointsValueCard cards={cards} totalMin={totalMin} totalMax={totalMax} />
+            <AwardPoolingCard cards={cards} />
           </>
         )}
 
@@ -846,6 +972,110 @@ const styles = StyleSheet.create({
     color: '#777777',
     fontSize: 10,
     marginTop: 2,
+  },
+
+  // Award Pooling Styles
+  poolHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  poolIconWrapper: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: 'rgba(245, 208, 111, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  poolHeaderSub: {
+    fontFamily: typography.fontFamily,
+    color: '#8A8A8A',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  poolList: {
+    gap: 12,
+    marginTop: 6,
+  },
+  poolCard: {
+    backgroundColor: '#141414',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#242424',
+    padding: 14,
+    gap: 10,
+  },
+  poolCardMulti: {
+    borderColor: 'rgba(245, 208, 111, 0.3)',
+    backgroundColor: '#161616',
+  },
+  poolTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  poolProgrammeName: {
+    fontFamily: typography.fontFamily,
+    color: '#F0F0F0',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  poolCardCount: {
+    fontFamily: typography.fontFamily,
+    color: '#8A8A8A',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  poolPointsTotal: {
+    fontFamily: typography.fontFamily,
+    color: colors.accent.goldStart,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  poolValueEstimate: {
+    fontFamily: typography.fontFamily,
+    color: '#A0A0A0',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  poolMemberBadges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  poolCardBadge: {
+    backgroundColor: '#202020',
+    borderRadius: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: '#303030',
+  },
+  poolCardBadgeText: {
+    fontFamily: typography.fontFamily,
+    color: '#D0D0D0',
+    fontSize: 11,
+  },
+  poolStatusBox: {
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 8,
+    padding: 8,
+    gap: 3,
+  },
+  poolStatusTitle: {
+    fontFamily: typography.fontFamily,
+    color: '#E0E0E0',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  poolStatusDesc: {
+    fontFamily: typography.fontFamily,
+    color: '#808080',
+    fontSize: 10,
+    lineHeight: 14,
   },
 
   // Expiry Specific

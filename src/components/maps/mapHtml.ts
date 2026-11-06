@@ -48,6 +48,8 @@ const css = (topPx: number) => `
   .mapboxgl-ctrl-logo {
     margin: 0 !important;
     opacity: 0.85 !important;
+    pointer-events: none !important;
+    cursor: default !important;
   }
   .mapboxgl-ctrl-attrib.mapboxgl-compact {
     background: rgba(18,20,24,0.85) !important;
@@ -56,10 +58,13 @@ const css = (topPx: number) => `
     max-width: 200px !important;
     max-height: 24px !important;
     overflow: hidden !important;
+    pointer-events: none !important;
   }
   .mapboxgl-ctrl-attrib a {
     color: #c9c9c9 !important;
     font-size: 10px !important;
+    pointer-events: none !important;
+    cursor: default !important;
   }
 `;
 
