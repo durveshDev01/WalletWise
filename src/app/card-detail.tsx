@@ -303,6 +303,7 @@ export default function CardDetailScreen() {
   const [lastFourText, setLastFourText] = useState('');
   const [statementDayText, setStatementDayText] = useState('');
   const [dueDayText, setDueDayText] = useState('');
+  const [expiryDaysText, setExpiryDaysText] = useState('');
 
   const cards = useCardStore((state) => state.cards);
   const updateHolding = useCardStore((state) => state.updateHolding);
@@ -329,18 +330,54 @@ export default function CardDetailScreen() {
     setLastFourText(card.lastFour);
     setStatementDayText(holding?.statementDay ? String(holding.statementDay) : '');
     setDueDayText(holding?.dueDay ? String(holding.dueDay) : '');
+    setExpiryDaysText(card.expiryDate ? card.expiryDate : card.expiryDays != null ? String(card.expiryDays) : '');
     setEditing(true);
   };
   const saveEdit = () => {
-    if (!/^\d+$/.test(pointsText.trim())) { Alert.alert('Enter points', 'Enter the current points or cashback balance. Enter 0 if you do not know it yet.'); return; }
+    if (pointsText.trim() !== '' && !/^\d+$/.test(pointsText.trim())) {
+      Alert.alert('Enter points', 'Please enter a valid whole number for your balance (leave empty for 0).');
+      return;
+    }
     if ([statementDayText, dueDayText].some((day) => day.trim() && !parseBillDay(day))) { Alert.alert('Check bill day', 'Statement and due days must be whole numbers from 1 to 31.'); return; }
-    updateHolding(card.id, { points: Number(pointsText.replace(/[^0-9]/g, '')) || 0, lastFour: lastFourText.replace(/[^0-9]/g, '').slice(-4), statementDay: parseBillDay(statementDayText), dueDay: parseBillDay(dueDayText) });
+
+    const trimmedExpiry = expiryDaysText.trim();
+    let expiryDateVal: string | undefined;
+    let expiryDaysVal: number | undefined;
+
+    if (trimmedExpiry) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmedExpiry)) {
+        expiryDateVal = trimmedExpiry;
+      } else if (/^\d+$/.test(trimmedExpiry)) {
+        expiryDaysVal = Number(trimmedExpiry);
+      } else {
+        Alert.alert('Check expiry', 'Please enter remaining days (e.g. 30) or a date in YYYY-MM-DD format.');
+        return;
+      }
+    }
+
+    updateHolding(card.id, {
+      points: Number(pointsText.replace(/[^0-9]/g, '')) || 0,
+      lastFour: lastFourText.replace(/[^0-9]/g, '').slice(-4),
+      statementDay: parseBillDay(statementDayText),
+      dueDay: parseBillDay(dueDayText),
+      expiryDays: expiryDaysVal,
+      expiryDate: expiryDateVal,
+    });
     setEditing(false);
   };
   const confirmRemove = () => {
+    const doRemove = () => {
+      removeHolding(card.id);
+      router.back();
+    };
+    if (Platform.OS === 'web') {
+      const ok = typeof window !== 'undefined' ? window.confirm(`Remove ${card.bankName} ${card.cardName} from your wallet?`) : true;
+      if (ok) doRemove();
+      return;
+    }
     Alert.alert('Remove card?', `${card.bankName} ${card.cardName} will be removed from your wallet.`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => { removeHolding(card.id); router.back(); } },
+      { text: 'Remove', style: 'destructive', onPress: doRemove },
     ]);
   };
 
@@ -394,10 +431,44 @@ export default function CardDetailScreen() {
                 <TextInput value={lastFourText} onChangeText={setLastFourText} keyboardType="number-pad" maxLength={4} style={s.editInput} placeholder="Last 4 digits" placeholderTextColor="#555" keyboardAppearance="dark" />
                 <TextInput value={statementDayText} onChangeText={setStatementDayText} keyboardType="number-pad" maxLength={2} style={s.editInput} placeholder="Statement day (1–31, optional)" placeholderTextColor="#555" keyboardAppearance="dark" />
                 <TextInput value={dueDayText} onChangeText={setDueDayText} keyboardType="number-pad" maxLength={2} style={s.editInput} placeholder="Due day (1–31, for reminders)" placeholderTextColor="#555" keyboardAppearance="dark" />
+                <TextInput
+                  value={expiryDaysText}
+                  onChangeText={setExpiryDaysText}
+                  style={s.editInput}
+                  placeholder={
+                    card.pointsExpiry?.neverExpires
+                      ? 'Points never expire'
+                      : card.pointsExpiry?.validityMonths
+                      ? `Expiry (default: ${card.pointsExpiry.validityMonths}m, or YYYY-MM-DD)`
+                      : 'Points expire in (days or YYYY-MM-DD, optional)'
+                  }
+                  placeholderTextColor="#555"
+                  keyboardAppearance="dark"
+                />
                 <Text style={s.statsValue}>Copy the balance and dates from your latest statement or bank app.</Text>
               </View>
             ) : (
-              <Text style={s.pointsNumerals}>{card.points.toLocaleString('en-IN')}</Text>
+              <View>
+                <Text style={s.pointsNumerals}>{card.points.toLocaleString('en-IN')}</Text>
+                {card.pointsExpiry?.neverExpires ? (
+                  <Text style={[s.statsValue, { color: '#54C78A', marginTop: 4 }]}>
+                    ✨ Points never expire
+                  </Text>
+                ) : card.expiryDays != null ? (
+                  <Text style={[s.statsValue, { color: card.expiryDays <= 30 ? '#E06D53' : '#9A9A9A', marginTop: 4 }]}>
+                    {card.expiryDays === 0
+                      ? '⚠️ Points expire today'
+                      : card.expiryDays === 1
+                      ? '⚠️ Points expire tomorrow'
+                      : `${card.expiryDays <= 30 ? '⚠️ ' : ''}Points expire in ${card.expiryDays} days${card.expiryDate ? ` (${card.expiryDate})` : ''}`}
+                  </Text>
+                ) : null}
+                {!!card.pointsExpiry?.note && (
+                  <Text style={[s.statsValue, { color: '#777', fontSize: 11, marginTop: 2 }]}>
+                    {card.pointsExpiry.note}
+                  </Text>
+                )}
+              </View>
             )}
             <View style={s.statsValueRow}>
               <Text style={s.statsValue}>
@@ -450,6 +521,16 @@ export default function CardDetailScreen() {
             {activeTab === 'Benefits' && <BenefitsTab card={card} />}
             {activeTab === 'Updates' && <UpdatesTab card={card} />}
             <Text style={s.attribution}>{DATA_ATTRIBUTION}</Text>
+            {!preview && (
+              <Pressable
+                onPress={confirmRemove}
+                style={s.removeCardButton}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${card.bankName} ${card.cardName} from wallet`}
+              >
+                <Text style={s.removeCardButtonText}>Remove this card from wallet</Text>
+              </Pressable>
+            )}
           </View>
         </Animated.View>
       </ScrollView>
@@ -810,5 +891,22 @@ const s = StyleSheet.create({
     color: '#9A9A9A',
     fontSize: 13,
     lineHeight: 18,
+  },
+  removeCardButton: {
+    marginTop: 24,
+    marginBottom: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(201, 65, 46, 0.4)',
+    backgroundColor: 'rgba(201, 65, 46, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeCardButtonText: {
+    fontFamily: typography.fontFamily,
+    color: '#E06D53',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

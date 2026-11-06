@@ -81,6 +81,19 @@ export type Card = {
   source?: string;
   /** Date a hand-added card was checked on the issuer's page. */
   verifiedAt?: string;
+  /** Points/cashback expiry policy derived from public bank T&Cs. */
+  pointsExpiry?: {
+    /** True when points never expire (e.g. Amex MR, HDFC Infinia). */
+    neverExpires: boolean;
+    /** Months from accrual date before points expire. null = never / unknown. */
+    validityMonths: number | null;
+    /** True when bank aligns expiry to the last calendar day of the Nth month (e.g. SBI). */
+    alignToMonthEnd: boolean;
+    /** True when ANY new earning transaction resets the expiry clock (e.g. IDFC FIRST). */
+    resetsOnActivity: boolean;
+    /** Human-readable source / caveat for this policy. */
+    note: string;
+  };
 };
 
 /** What the issuer says about paying with this card on UPI. */

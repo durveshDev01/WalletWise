@@ -1,10 +1,10 @@
 import React from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 
 import { thumbnailUrl, VIDEOS, videoUrl } from '../data/videos';
 import type { Video } from '../data/videos';
-import { useCardStore } from '../store/useCardStore';
 import { colors, typography } from '../theme';
 
 const LEVEL_COLORS: Record<Video['level'], string> = { Beginner: '#54C78A', Rewards: '#F5D06F', Travel: '#6FB1FF' };
@@ -12,8 +12,6 @@ const LEVEL_COLORS: Record<Video['level'], string> = { Beginner: '#54C78A', Rewa
 /** Swipeable rail of expert videos; tapping opens YouTube in the in-app browser. */
 export function VideoRail({ level, horizontalPadding = 20 }: { level?: Video['level']; horizontalPadding?: number }) {
   const videos = level ? VIDEOS.filter((v) => v.level === level) : VIDEOS;
-  // Lite mode saves data: no thumbnail downloads, just the play button on a plain tile.
-  const liteMode = useCardStore((s) => s.liteMode === true);
   return (
     <ScrollView
       horizontal
@@ -25,7 +23,14 @@ export function VideoRail({ level, horizontalPadding = 20 }: { level?: Video['le
       {videos.map((v) => (
         <Pressable key={v.id} style={styles.card} onPress={() => WebBrowser.openBrowserAsync(videoUrl(v.id))}>
           <View style={styles.thumbWrap}>
-            {!liteMode && <Image source={{ uri: thumbnailUrl(v.id) }} style={styles.thumb} resizeMode="cover" />}
+            <Image
+              source={{ uri: thumbnailUrl(v.id) }}
+              style={styles.thumb}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              priority="high"
+              transition={200}
+            />
             <View style={styles.play}>
               <Text style={styles.playIcon}>▶</Text>
             </View>

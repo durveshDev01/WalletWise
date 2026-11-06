@@ -194,7 +194,6 @@ const PointsCalculator = () => {
 };
 
 // ==========================================
-// ==========================================
 // 6. INTERACTIVE QUIZ DECK (Learning Flow)
 // ==========================================
 const QUIZ_BANK = [
@@ -223,38 +222,90 @@ const QUIZ_BANK = [
     rationale: "The Marriott Bonvoy card earns Bonvoy points directly, yielding better hotel room value than standard 1:1 or 2:1 bank transfer ratios."
   },
   {
-    question: "Can cashback rewards earned on SBI Cashback be transferred to airline air miles?",
+    question: "Can cashback rewards earned on SBI Cashback be transferred to airline miles?",
     options: ["Yes, to Air India and Singapore KrisFlyer", "No, cashback is credited as a statement credit only"],
     correctIdx: 1,
     rationale: "Cashback-only cards credit your monthly statement directly. They have no frequent-flyer transfer partners."
-  }
+  },
+  {
+    question: "What is the typical interest-free grace period on most Indian credit cards?",
+    options: ["Up to 50 days from statement date", "Only 10 days after the due date"],
+    correctIdx: 0,
+    rationale: "Most Indian cards offer 20–50 days interest-free if you pay the full statement balance by the due date. Carrying any balance removes this grace period."
+  },
+  {
+    question: "What happens to your CIBIL score if you use more than 80% of your credit limit regularly?",
+    options: ["It improves — high usage shows active repayment", "It may drop — high utilisation signals credit stress"],
+    correctIdx: 1,
+    rationale: "Credit bureaus consider a utilisation ratio above 30–40% a negative signal. Keep usage low even if you repay in full every month."
+  },
+  {
+    question: "Which fee does a credit card cash advance NOT waive?",
+    options: ["Annual fee", "Interest from day one of withdrawal"],
+    correctIdx: 1,
+    rationale: "Cash advances incur a withdrawal fee (typically 2.5%) and interest immediately — there is no grace period. Debit-card ATM withdrawals do not carry these charges."
+  },
+  {
+    question: "An airport lounge charges ₹2 when you tap your card. Why?",
+    options: ["It is a convenience fee for the terminal", "It is a validity check to confirm the card is active"],
+    correctIdx: 1,
+    rationale: "Many lounges run a ₹2 authorisation to verify the card is live. The hold is reversed. This is not a lounge access fee."
+  },
+  {
+    question: "Closing your oldest credit card will most likely…",
+    options: ["Reduce your average credit age and may lower your score", "Have no effect because bureaus ignore closed accounts"],
+    correctIdx: 0,
+    rationale: "Length of credit history is a scoring factor. Closing an old card shrinks your average account age and your total available limit, both of which can lower your CIBIL score."
+  },
 ];
 
+type QuizItem = { question: string; options: string[]; correctIdx: number; rationale: string };
+
+/** Shuffles an array in-place using Fisher-Yates and returns it. */
+function shuffle<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function newQuizQuestions(): QuizItem[] {
+  return shuffle([...QUIZ_BANK]).slice(0, 7) as QuizItem[];
+}
+
 const CardQuiz = () => {
+  // Lazy initialiser: questions are shuffled once on mount.
+  // Because Expo Router keeps tab components mounted, useState state
+  // persists across tab switches without needing a ref.
+  const [questions] = useState<QuizItem[]>(newQuizQuestions);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [score, setScore] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
+  // Key increments on restart to remount with fresh shuffled questions.
+  const [sessionKey, setSessionKey] = useState(0);
 
-  const ringScale = useSharedValue(0);
+  // Suppress unused sessionKey warning (it's used as a component key externally).
+  void sessionKey;
 
-  const question = QUIZ_BANK[currentIdx];
+  const question = questions[currentIdx];
   const isAnswered = selectedIdx !== null;
   const isCorrect = selectedIdx === question.correctIdx;
+
+  const ringScale = useSharedValue(0);
 
   const handleAnswer = (idx: number) => {
     if (isAnswered) return;
     setSelectedIdx(idx);
-    if (idx === question.correctIdx) {
-      setScore((s) => s + 1);
-    }
+    if (idx === question.correctIdx) setScore((s) => s + 1);
     ringScale.value = withSpring(1);
   };
 
   const handleNext = () => {
     ringScale.value = 0;
     setSelectedIdx(null);
-    if (currentIdx + 1 < QUIZ_BANK.length) {
+    if (currentIdx + 1 < questions.length) {
       setCurrentIdx((i) => i + 1);
     } else {
       setShowSummary(true);
@@ -267,6 +318,7 @@ const CardQuiz = () => {
     setScore(0);
     setShowSummary(false);
     ringScale.value = 0;
+    setSessionKey((k) => k + 1);
   };
 
   const ringStyle = useAnimatedStyle(() => ({
@@ -275,7 +327,7 @@ const CardQuiz = () => {
   }));
 
   if (showSummary) {
-    const pct = Math.round((score / QUIZ_BANK.length) * 100);
+    const pct = Math.round((score / questions.length) * 100);
     const badge = pct >= 80 ? '🏆 Credit Card Master' : pct >= 60 ? '🎓 Smart Cardholder' : '📖 Credit Explorer';
     return (
       <View style={[styles.toolCard, { width: '100%', marginBottom: 16 }]}>
@@ -283,7 +335,7 @@ const CardQuiz = () => {
         <Text style={styles.toolTitle}>Quiz Completed!</Text>
         <Text style={styles.summaryBadge}>{badge}</Text>
         <Text style={styles.toolSub}>
-          You scored {score} out of {QUIZ_BANK.length} ({pct}%).
+          You scored {score} out of {questions.length} ({pct}%).
         </Text>
         <View style={styles.summaryTakeaway}>
           <Text style={styles.summaryTakeawayTitle}>Key Takeaway:</Text>
@@ -291,8 +343,8 @@ const CardQuiz = () => {
             Never carry an unpaid balance (it cancels your grace period), match category spend to dedicated multiplier cards, and keep cashback separate from air miles.
           </Text>
         </View>
-        <Pressable style={styles.quizNextBtn} onPress={handleRestart}>
-          <Text style={styles.quizNextBtnText}>Retake Quiz ↺</Text>
+        <Pressable style={styles.quizNextBtn} onPress={handleRestart} accessibilityRole="button">
+          <Text style={styles.quizNextBtnText}>New Quiz ↺</Text>
         </Pressable>
       </View>
     );
@@ -302,10 +354,10 @@ const CardQuiz = () => {
     <View style={[styles.toolCard, { width: '100%', marginBottom: 16 }]}>
       <View style={styles.quizDeckHeader}>
         <Text style={styles.toolIcon}>?</Text>
-        <Text style={styles.quizDeckCounter}>Question {currentIdx + 1} of {QUIZ_BANK.length}</Text>
+        <Text style={styles.quizDeckCounter}>Question {currentIdx + 1} of {questions.length}</Text>
       </View>
       <View style={styles.quizProgressBar}>
-        <View style={[styles.quizProgressFill, { width: `${((currentIdx + 1) / QUIZ_BANK.length) * 100}%` }]} />
+        <View style={[styles.quizProgressFill, { width: `${((currentIdx + 1) / questions.length) * 100}%` }]} />
       </View>
 
       <Text style={[styles.toolSub, { marginTop: 12 }]}>{question.question}</Text>
@@ -313,7 +365,7 @@ const CardQuiz = () => {
       {!isAnswered ? (
         <View style={styles.quizOptions}>
           {question.options.map((opt, i) => (
-            <Pressable key={i} style={styles.quizBtn} onPress={() => handleAnswer(i)}>
+            <Pressable key={i} style={styles.quizBtn} onPress={() => handleAnswer(i)} accessibilityRole="button" accessibilityLabel={opt}>
               <Text style={styles.quizBtnText}>{opt}</Text>
             </Pressable>
           ))}
@@ -345,9 +397,9 @@ const CardQuiz = () => {
               <Text style={styles.quizResultDesc}>{question.rationale}</Text>
             </View>
           </View>
-          <Pressable style={styles.quizNextBtn} onPress={handleNext}>
+          <Pressable style={styles.quizNextBtn} onPress={handleNext} accessibilityRole="button">
             <Text style={styles.quizNextBtnText}>
-              {currentIdx + 1 < QUIZ_BANK.length ? 'Next Question →' : 'View Results →'}
+              {currentIdx + 1 < questions.length ? 'Next Question →' : 'View Results →'}
             </Text>
           </Pressable>
         </View>

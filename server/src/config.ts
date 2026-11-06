@@ -5,23 +5,29 @@
 import { fileURLToPath } from 'node:url';
 
 const num = (value: string | undefined, fallback: number) => {
-  const n = Number(value);
+  const n = Number(value?.trim());
   return Number.isFinite(n) && n > 0 ? n : fallback;
 };
 
-const embeddingsProvider = (process.env.EMBEDDINGS_PROVIDER ?? 'local').toLowerCase();
+const str = (value: string | undefined, fallback = '') => (value ?? fallback).trim();
+
+const embeddingsProvider = str(process.env.EMBEDDINGS_PROVIDER, 'local').toLowerCase();
 const gemini = embeddingsProvider === 'gemini';
 // Measured with gemini-embedding-001: off-topic questions score about 0.50, card questions 0.6 and up.
 const GEMINI_MIN_SCORE = 0.58;
 
 export const config = {
   port: num(process.env.AURA_PORT, 8787),
-  host: process.env.AURA_HOST ?? '0.0.0.0',
+  host: str(process.env.AURA_HOST, '0.0.0.0'),
 
   /** Which LLM implementation to use. Only "groq" exists today. */
-  llmProvider: (process.env.LLM_PROVIDER ?? 'groq').toLowerCase(),
-  groqApiKey: process.env.GROQ_API_KEY ?? '',
-  groqModel: process.env.GROQ_MODEL ?? '',
+  llmProvider: str(process.env.LLM_PROVIDER, 'groq').toLowerCase(),
+  groqApiKey: str(process.env.GROQ_API_KEY),
+  groqModel: (() => {
+    const m = str(process.env.GROQ_MODEL);
+    // If unset or set to discontinued / restricted llama-3.3-70b-versatile, use the active tool-calling model
+    return (!m || m === 'llama-3.3-70b-versatile') ? 'openai/gpt-oss-120b' : m;
+  })(),
   temperature: 0.1,
   /** Retries after a rate limit (429), timeout or 5xx, with exponential backoff. */
   llmMaxRetries: 2,
@@ -34,16 +40,16 @@ export const config = {
    * the default) or "gemini" (Gemini API, used on Vercel where the local model is too big).
    */
   embeddingsProvider,
-  embeddingsModel: process.env.EMBEDDINGS_MODEL ?? (gemini ? 'gemini-embedding-001' : 'Xenova/all-MiniLM-L6-v2'),
+  embeddingsModel: str(process.env.EMBEDDINGS_MODEL, gemini ? 'gemini-embedding-001' : 'Xenova/all-MiniLM-L6-v2'),
   /** Vector length requested from Gemini (768 is one of Google's recommended sizes). */
   embeddingsDimensions: num(process.env.EMBEDDINGS_DIMENSIONS, 768),
-  geminiApiKey: process.env.GEMINI_API_KEY ?? '',
+  geminiApiKey: str(process.env.GEMINI_API_KEY),
 
   /**
    * "chroma" (default): Chroma, with the index file as a backup when Chroma is down.
    * "file": only the index file written by ingest (used on Vercel, no database needed).
    */
-  vectorStore: (process.env.VECTOR_STORE ?? 'chroma').toLowerCase(),
+  vectorStore: str(process.env.VECTOR_STORE, 'chroma').toLowerCase(),
   /**
    * Index file written by ingest. Each embeddings provider has its own file, because
    * vectors from different models cannot be compared. The Gemini one is committed to git

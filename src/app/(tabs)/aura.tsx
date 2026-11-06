@@ -42,8 +42,7 @@ const plain = (text: string) =>
     .replace(/(^|\s)\*(?=\S)([^*\n]+)\*(?=\s|[.,;:!?]|$)/g, '$1$2')
     .replace(/^#{1,6}\s+/gm, '');
 
-let nextId = 0;
-const newId = () => `m${++nextId}`;
+const newId = () => `m-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 
 /** Three gold dots that pulse while Aura is working. */
 function TypingDots({ label }: { label: string }) {
@@ -82,7 +81,18 @@ export default function AuraScreen() {
   const handledQuery = useRef<string | undefined>(undefined);
 
   const [messages, setMessages] = useState<Message[]>(() => {
-    if (savedMessages && savedMessages.length > 0) return savedMessages;
+    if (savedMessages && savedMessages.length > 0) {
+      const seen = new Set<string>();
+      return savedMessages.map((m, index) => {
+        if (!m.id || seen.has(m.id)) {
+          const uniqueId = `m-${index}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+          seen.add(uniqueId);
+          return { ...m, id: uniqueId };
+        }
+        seen.add(m.id);
+        return m;
+      });
+    }
     return [{ id: 'welcome', role: 'assistant', content: '', state: 'done' }];
   });
   const [input, setInput] = useState('');
@@ -214,25 +224,7 @@ export default function AuraScreen() {
     >
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <View style={styles.headerIcon}>
-            <Icon name="sparkle" color={theme.colors.gold} size={theme.sizes.icon} />
-          </View>
-          <Text style={[theme.text.body, styles.headerTitle]} accessibilityRole="header">
-            AURA
-          </Text>
-          <Text style={theme.text.caption}>{simple ? `${t.caption} · ${t.simpleOn}` : t.caption}</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Pressable
-              onPress={() => setAuraLanguage(language === 'hi' ? 'en' : 'hi')}
-              accessibilityRole="button"
-              accessibilityLabel={t.languageToggle}
-              hitSlop={theme.spacing.sm}
-              style={({ pressed }) => [styles.langToggle, pressed && styles.pressed]}
-            >
-              <Text style={[theme.text.caption, language === 'en' ? styles.langOn : undefined]}>EN</Text>
-              <Text style={theme.text.caption}>|</Text>
-              <Text style={[theme.text.caption, language === 'hi' ? styles.langOn : undefined]}>हिं</Text>
-            </Pressable>
+          <View style={styles.headerTopActions}>
             {messages.length > 1 && (
               <Pressable
                 onPress={handleClearChat}
@@ -244,7 +236,25 @@ export default function AuraScreen() {
                 <Text style={styles.clearChatText}>Clear</Text>
               </Pressable>
             )}
+            <Pressable
+              onPress={() => setAuraLanguage(language === 'hi' ? 'en' : 'hi')}
+              accessibilityRole="button"
+              accessibilityLabel={t.languageToggle}
+              hitSlop={theme.spacing.sm}
+              style={({ pressed }) => [styles.langToggle, pressed && styles.pressed]}
+            >
+              <Text style={[theme.text.caption, language === 'en' ? styles.langOn : undefined]}>EN</Text>
+              <Text style={theme.text.caption}>|</Text>
+              <Text style={[theme.text.caption, language === 'hi' ? styles.langOn : undefined]}>हिं</Text>
+            </Pressable>
           </View>
+          <View style={styles.headerIcon}>
+            <Icon name="sparkle" color={theme.colors.gold} size={theme.sizes.icon} />
+          </View>
+          <Text style={[theme.text.body, styles.headerTitle]} accessibilityRole="header">
+            AURA
+          </Text>
+          <Text style={theme.text.caption}>{simple ? `${t.caption} · ${t.simpleOn}` : t.caption}</Text>
         </View>
 
         <ScrollView
@@ -255,11 +265,11 @@ export default function AuraScreen() {
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
           keyboardShouldPersistTaps="handled"
         >
-          {messages.map((m) => {
+          {messages.map((m, idx) => {
             const isUser = m.role === 'user';
             const streamingEmpty = m.state === 'streaming' && !m.content;
             return (
-              <View key={m.id} style={[styles.row, isUser ? styles.rowUser : styles.rowAi]}>
+              <View key={`${m.id || 'msg'}-${idx}`} style={[styles.row, isUser ? styles.rowUser : styles.rowAi]}>
                 {!isUser && (
                   <View style={styles.avatar}>
                     <Icon name="sparkle" color={theme.colors.gold} size={theme.fontSize.caption} />
@@ -358,10 +368,21 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.8 },
   header: {
     alignItems: 'center',
+    justifyContent: 'center',
     gap: theme.spacing.xs,
     paddingVertical: theme.spacing.md,
     borderBottomWidth: theme.sizes.hairline,
     borderBottomColor: theme.colors.border,
+    position: 'relative',
+  },
+  headerTopActions: {
+    position: 'absolute',
+    right: theme.spacing.md,
+    top: theme.spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    zIndex: 10,
   },
   headerIcon: {
     width: theme.sizes.touch,
@@ -375,28 +396,26 @@ const styles = StyleSheet.create({
   },
   headerTitle: { color: theme.colors.gold, fontWeight: '700', letterSpacing: 2 },
   clearChatBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: theme.radius.sm,
-    backgroundColor: '#1E1E1E',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.surface,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: theme.colors.border,
   },
   clearChatText: {
     fontFamily: theme.fontFamily,
-    fontSize: 11,
-    color: '#888',
+    fontSize: 12,
+    color: theme.colors.textMuted,
     fontWeight: '600',
   },
   langToggle: {
-    position: 'absolute',
-    right: theme.spacing.md,
-    top: theme.spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.xs,
-    minHeight: theme.sizes.touch,
+    minHeight: 28,
     paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 4,
     borderRadius: theme.radius.pill,
     borderWidth: 1,
     borderColor: theme.colors.border,

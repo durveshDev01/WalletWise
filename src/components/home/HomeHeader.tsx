@@ -3,6 +3,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { theme } from '../../theme';
 import { Icon } from '../Icon';
+import { useCardStore } from '../../store/useCardStore';
+import { UI_STRINGS } from '../../services/appStrings';
 
 type Props = {
   topInset: number;
@@ -11,22 +13,26 @@ type Props = {
   onSettings: () => void;
 };
 
-function greeting() {
+function greeting(lang: 'en' | 'hi') {
   const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 18) return 'Good afternoon';
-  return 'Good evening';
+  const t = UI_STRINGS[lang].home;
+  if (hour < 12) return t.morning;
+  if (hour < 18) return t.afternoon;
+  return t.evening;
 }
 
 /** Greeting with the alerts bell and settings gear, both gold outline icons. */
 export function HomeHeader({ topInset, hasAlerts, onAlerts, onSettings }: Props) {
+  const language = useCardStore((s) => s.auraLanguage ?? 'en');
+  const t = UI_STRINGS[language].home;
+
   return (
     <View style={[styles.header, { paddingTop: topInset + theme.spacing.sm }]}>
       <View style={styles.titles}>
         <Text style={theme.text.title} accessibilityRole="header">
-          {greeting()}
+          {greeting(language)}
         </Text>
-        <Text style={theme.text.caption}>Welcome to WalletWise</Text>
+        <Text style={theme.text.caption}>{t.welcome}</Text>
       </View>
       <View style={styles.actions}>
         <Pressable

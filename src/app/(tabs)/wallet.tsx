@@ -18,9 +18,10 @@ import { ScrollView, GestureDetector, Gesture } from 'react-native-gesture-handl
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { typography, colors } from '../../theme';
-import { useCardStore, CardData } from '../../store/useCardStore';
+import { useCardStore, CardData, isSampleHolding } from '../../store/useCardStore';
 import { CreditCardImage } from '../../components/CreditCardImage';
 import { WalletMoneyLinks } from '../../components/money/WalletMoneyLinks';
+import { UI_STRINGS } from '../../services/appStrings';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -37,58 +38,92 @@ const EXPANDED_SPACING = 85;       // Overlapping spread distance
 // ─────────────────────────────────────────────
 function ExpiryBanner({ cards }: { cards: CardData[] }) {
   const router = useRouter();
-  const expiringCard = cards.find(c => c.expiryDays && c.expiryDays <= 30);
-  if (!expiringCard) return null;
+  const expiringCards = cards
+    .filter(c => c.expiryDays != null && c.expiryDays <= 30 && c.points > 0)
+    .sort((a, b) => (a.expiryDays ?? 0) - (b.expiryDays ?? 0));
+
+  if (expiringCards.length === 0) return null;
 
   return (
-    <View style={[styles.infoCard, { borderColor: 'rgba(201, 65, 46, 0.3)' }]}>
-      <View style={styles.expiryBody}>
-        <Text style={[styles.infoLabel, { color: colors.accent.danger }]}>{expiringCard.currencyName.toUpperCase()} EXPIRING SOON</Text>
-        <View style={styles.expiryStats}>
-          <View style={styles.expiryStat}>
-            <Text style={styles.infoBigNum}>{expiringCard.points.toLocaleString('en-IN')}</Text>
-            <Text style={styles.infoUnit}>{expiringCard.currencyName}</Text>
+    <>
+      {expiringCards.map((card) => {
+        const isToday = card.expiryDays === 0;
+        const isTomorrow = card.expiryDays === 1;
+
+        return (
+          <View key={card.id} style={[styles.infoCard, { borderColor: 'rgba(201, 65, 46, 0.3)' }]}>
+            <View style={styles.expiryBody}>
+              <Text style={[styles.infoLabel, { color: colors.accent.danger }]}>
+                {isToday ? `${card.currencyName.toUpperCase()} EXPIRING TODAY` : `${card.currencyName.toUpperCase()} EXPIRING SOON`}
+              </Text>
+              <View style={styles.expiryStats}>
+                <View style={styles.expiryStat}>
+                  <Text style={styles.infoBigNum}>{card.points.toLocaleString('en-IN')}</Text>
+                  <Text style={styles.infoUnit}>{card.currencyName}</Text>
+                </View>
+                <View style={styles.expiryDivider} />
+                <View style={styles.expiryStat}>
+                  <Text style={styles.infoBigNum}>{isToday ? 'Today' : isTomorrow ? '1' : card.expiryDays}</Text>
+                  <Text style={styles.infoUnit}>{isToday ? 'expires' : isTomorrow ? 'day left' : 'days left'}</Text>
+                </View>
+              </View>
+              <Text style={styles.infoSubtext}>{card.bankName} {card.cardName}</Text>
+            </View>
+            <Pressable
+              style={styles.expiryCtaButton}
+              onPress={() => router.push({ pathname: '/card-detail', params: { id: card.id, tab: 'Redeem' } })}
+              accessibilityRole="button"
+              accessibilityLabel={`Redeem ${card.bankName} ${card.cardName} expiring points`}
+            >
+              <Text style={styles.expiryCta}>Redeem →</Text>
+            </Pressable>
           </View>
-          <View style={styles.expiryDivider} />
-          <View style={styles.expiryStat}>
-            <Text style={styles.infoBigNum}>{expiringCard.expiryDays}</Text>
-            <Text style={styles.infoUnit}>days left</Text>
-          </View>
-        </View>
-        <Text style={styles.infoSubtext}>{expiringCard.bankName} {expiringCard.cardName}</Text>
-      </View>
-      <Pressable
-        style={styles.expiryCtaButton}
-        onPress={() => router.push({ pathname: '/card-detail', params: { id: expiringCard.id, tab: 'Redeem' } })}
-      >
-        <Text style={styles.expiryCta}>Redeem →</Text>
-      </Pressable>
-    </View>
+        );
+      })}
+    </>
   );
 }
 
 // ─────────────────────────────────────────────
 // Points Value Card (Black + Gold Theme) — Programme-specific redemptions
 // ─────────────────────────────────────────────
-function PointsValueCard({ cards, totalMin, totalMax }: { cards: CardData[]; totalMin: number; totalMax: number }) {
+function PointsValueCard({ cards, totalMin, totalMax, explainText }: { cards: CardData[]; totalMin: number; totalMax: number; explainText?: string }) {
   const router = useRouter();
 
   const programmes = useMemo(() => {
     return cards
-      .filter((c) => c.points > 0 || c.lowValue > 0)
       .map((c) => {
         const catCard = catalog.byId.get(c.catalogId);
         const routes = catCard ? redemptionRoutes(catalog, catCard) : [];
         const airlineRoutes = routes.filter((r) => r.kind === 'TRANSFER' && r.partnerKind === 'AIRLINE');
-        const hasAirline = airlineRoutes.length > 0;
+        const hotelRoutes = routes.filter((r) => r.kind === 'TRANSFER' && r.partnerKind === 'HOTEL');
+        const cashRoute = routes.find((r) => r.kind === 'CASH');
+        const isCashback = c.currencyName.toLowerCase().includes('cashback') || (routes.length === 1 && routes[0].kind === 'CASH');
+        const noBalance = c.points === 0 && c.lowValue === 0;
+
+        const avenues: string[] = [];
+        if (!noBalance) {
+          if (airlineRoutes.length > 0) {
+            const names = airlineRoutes.slice(0, 2).map((r) => r.label.replace(/^Transfer to /, ''));
+            avenues.push(`✈️ Flights (${airlineRoutes.length} airline${airlineRoutes.length > 1 ? 's' : ''}: ${names.join(', ')}${airlineRoutes.length > 2 ? '…' : ''})`);
+          }
+          if (hotelRoutes.length > 0) {
+            const names = hotelRoutes.slice(0, 2).map((r) => r.label.replace(/^Transfer to /, ''));
+            avenues.push(`🏨 Hotels (${hotelRoutes.length} partner${hotelRoutes.length > 1 ? 's' : ''}: ${names.join(', ')}${hotelRoutes.length > 2 ? '…' : ''})`);
+          }
+          if (cashRoute || isCashback) {
+            avenues.push(`💵 Statement credit / Cash`);
+          }
+          if (!isCashback) {
+            avenues.push(`🛍️ Brand vouchers & rewards portal`);
+          }
+        }
+
         return {
           card: c,
-          hasAirline,
-          airlinePartners: airlineRoutes.map((r) => r.label),
+          avenues,
+          noBalance,
           routesCount: routes.length,
-          isCashback:
-            c.currencyName.toLowerCase().includes('cashback') ||
-            (!hasAirline && routes.every((r) => r.kind === 'CASH')),
         };
       });
   }, [cards]);
@@ -100,13 +135,22 @@ function PointsValueCard({ cards, totalMin, totalMax }: { cards: CardData[]; tot
         ₹{totalMin.toLocaleString('en-IN')}{totalMax > totalMin ? ` – ₹${totalMax.toLocaleString('en-IN')}` : ''}
       </Text>
       <Text style={styles.infoSubtext}>
-        Estimated INR equivalent separated by reward programme. Balances cannot be combined across different banks.
+        {explainText ?? 'Estimated INR equivalent per card account. Reward points are card-specific and cannot be pooled or transferred across cards.'}
       </Text>
 
       {/* Programme Breakdown */}
-      {programmes.length > 0 && (
+      {programmes.length === 0 ? (
+        <View style={styles.emptyProgrammeSlot}>
+          <Text style={styles.emptyProgrammeText}>
+            No card balances recorded yet. Add your cards or tap &ldquo;Load sample deck&rdquo; above to see reward valuations.
+          </Text>
+          <Pressable onPress={() => router.push('/add-card')} style={{ marginTop: 8 }} accessibilityRole="button">
+            <Text style={styles.emptyProgrammeAction}>+ Add your first card →</Text>
+          </Pressable>
+        </View>
+      ) : (
         <View style={styles.programmeList}>
-          {programmes.map(({ card: c, hasAirline, airlinePartners, isCashback }) => (
+          {programmes.map(({ card: c, avenues, noBalance }) => (
             <Pressable
               key={c.id}
               style={styles.programmeItem}
@@ -114,17 +158,57 @@ function PointsValueCard({ cards, totalMin, totalMax }: { cards: CardData[]; tot
             >
               <View style={{ flex: 1 }}>
                 <Text style={styles.programmeCardName}>{c.bankName} {c.cardName}</Text>
-                <Text style={styles.programmeBalance}>
-                  {c.points.toLocaleString('en-IN')} {c.currencyName} ≈ ₹{c.lowValue.toLocaleString('en-IN')}{c.highValue > c.lowValue ? ` – ₹${c.highValue.toLocaleString('en-IN')}` : ''}
-                </Text>
-                {hasAirline ? (
-                  <Text style={styles.programmeDetail}>
-                    ✈ Eligible for {airlinePartners.length} airline partner{airlinePartners.length > 1 ? 's' : ''} ({airlinePartners.slice(0, 2).join(', ')}{airlinePartners.length > 2 ? '...' : ''})
-                  </Text>
+                {noBalance ? (
+                  <>
+                    <Text style={[styles.programmeDetail, { color: '#7A7A7A', fontStyle: 'italic' }]}>
+                      No balance recorded — tap to update points
+                    </Text>
+                    {c.pointsExpiry?.neverExpires ? (
+                      <Text style={[styles.programmeDetail, { color: '#54C78A', fontWeight: '600' }]}>
+                        ✨ Points never expire
+                      </Text>
+                    ) : c.pointsExpiry?.note ? (
+                      <Text style={[styles.programmeDetail, { color: '#888888', fontSize: 11 }]}>
+                        Policy: {c.pointsExpiry.note}
+                      </Text>
+                    ) : null}
+                  </>
                 ) : (
-                  <Text style={[styles.programmeDetail, { color: '#7E7E7E' }]}>
-                    💵 {isCashback ? 'Statement credit / cash only · No airline partners' : 'Voucher / merchandise only'}
-                  </Text>
+                  <>
+                    <Text style={styles.programmeBalance}>
+                      {c.points.toLocaleString('en-IN')} {c.currencyName} ≈ ₹{c.lowValue.toLocaleString('en-IN')}{c.highValue > c.lowValue ? ` – ₹${c.highValue.toLocaleString('en-IN')}` : ''}
+                    </Text>
+                    {/* Expiry timeline */}
+                    {c.pointsExpiry?.neverExpires ? (
+                      <Text style={[styles.programmeDetail, { color: '#54C78A', fontWeight: '600' }]}>
+                        ✨ Points never expire
+                      </Text>
+                    ) : c.expiryDays != null ? (
+                      <Text style={[styles.programmeDetail, { color: c.expiryDays <= 30 ? colors.accent.danger : '#F5D06F', fontWeight: '600' }]}>
+                        {c.expiryDays === 0
+                          ? '🚨 Points expire today!'
+                          : c.expiryDays === 1
+                          ? '🚨 Points expire tomorrow!'
+                          : `⏳ Points expire in ${c.expiryDays} days${c.expiryDate ? ` (${c.expiryDate})` : ''}`}
+                      </Text>
+                    ) : c.expiryDate ? (
+                      <Text style={[styles.programmeDetail, { color: '#F5D06F' }]}>
+                        ⏳ Points expire: {c.expiryDate}
+                      </Text>
+                    ) : null}
+                    {!!c.pointsExpiry?.note && !c.pointsExpiry.neverExpires && (
+                      <Text style={[styles.programmeDetail, { color: '#888888', fontSize: 10 }]}>
+                        Rule: {c.pointsExpiry.note}
+                      </Text>
+                    )}
+                    <View style={{ marginTop: 4, gap: 2 }}>
+                      {avenues.map((av, idx) => (
+                        <Text key={idx} style={styles.programmeDetail}>
+                          {av}
+                        </Text>
+                      ))}
+                    </View>
+                  </>
                 )}
               </View>
               <Text style={styles.programmeArrow}>→</Text>
@@ -134,15 +218,36 @@ function PointsValueCard({ cards, totalMin, totalMax }: { cards: CardData[]; tot
       )}
 
       <View style={styles.horizontalDivider} />
+
       <Pressable style={styles.infoRow} onPress={() => router.push('/trip-planner')}>
         <Text style={styles.infoIcon}>✈︎</Text>
         <View style={{ flex: 1 }}>
-          <Text style={styles.infoRowTitle}>Plan Flight Redemption</Text>
+          <Text style={styles.infoRowTitle}>Travel Awards & Redemption Planner</Text>
           <Text style={styles.infoRowSub}>
-            Compare eligible airline transfer routes and check award availability with taxes. Open Trip Planner →
+            Plan flights, hotel stays (Marriott, Accor), and check net award value with tax deductions. Open Planner →
           </Text>
         </View>
+        <Text style={styles.programmeArrow}>→</Text>
       </Pressable>
+
+      <View style={styles.redemptionGrid}>
+        <View style={styles.redemptionPill}>
+          <Text style={styles.redemptionPillTitle}>✈️ Flights</Text>
+          <Text style={styles.redemptionPillDesc}>Miles transfer or portal</Text>
+        </View>
+        <View style={styles.redemptionPill}>
+          <Text style={styles.redemptionPillTitle}>🏨 Hotels</Text>
+          <Text style={styles.redemptionPillDesc}>Marriott, Accor, ITC</Text>
+        </View>
+        <View style={styles.redemptionPill}>
+          <Text style={styles.redemptionPillTitle}>💵 Statement Cash</Text>
+          <Text style={styles.redemptionPillDesc}>Direct bill credit</Text>
+        </View>
+        <View style={styles.redemptionPill}>
+          <Text style={styles.redemptionPillTitle}>🛍️ Vouchers</Text>
+          <Text style={styles.redemptionPillDesc}>Amazon, Flipkart, retail</Text>
+        </View>
+      </View>
     </View>
   );
 }
@@ -284,6 +389,9 @@ export default function WalletScreen() {
   const cards = useCardStore((state) => state.cards);
   const isDemo = useCardStore((state) => state.isDemo);
   const removeSampleCards = useCardStore((state) => state.removeSampleCards);
+  const loadSampleCards = useCardStore((state) => state.loadSampleCards);
+  const language = useCardStore((state) => state.auraLanguage ?? 'en');
+  const t = UI_STRINGS[language].wallet;
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -319,6 +427,7 @@ export default function WalletScreen() {
 
   // Pan gesture for expanding/collapsing
   const panGesture = Gesture.Pan()
+    .enabled(cards.length > 1)
     .activeOffsetY([-20, 20])
     .onStart(() => {
       context.value = dragProgress.value;
@@ -369,11 +478,27 @@ export default function WalletScreen() {
       >
         {/* Header (Top) */}
         <View style={styles.header}>
-          <View>
-            <Text style={styles.headerTitle}>My Cards</Text>
-            <Text style={styles.headerSubLabel}>
-              Points worth: <Text style={{ color: colors.accent.goldStart }}>₹{totalMin.toLocaleString('en-IN')} – ₹{totalMax.toLocaleString('en-IN')}</Text>
-            </Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.headerTitle}>{t.title}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+              <Text style={styles.headerSubLabel}>
+                {cards.length > 0
+                  ? totalMax > 0
+                    ? `${t.pointsWorth} `
+                    : 'No balances recorded'
+                  : '0 cards in deck'}
+                {cards.length > 0 && totalMax > 0 && (
+                  <Text style={{ color: colors.accent.goldStart }}>
+                    ₹{totalMin.toLocaleString('en-IN')}{totalMax > totalMin ? ` – ₹${totalMax.toLocaleString('en-IN')}` : ''}
+                  </Text>
+                )}
+              </Text>
+              {(isDemo || cards.some(isSampleHolding)) && cards.length > 0 && (
+                <Pressable onPress={removeSampleCards} style={styles.demoChip} accessibilityLabel="Clear sample comparison cards">
+                  <Text style={styles.demoChipText}>Sample Deck · Clear</Text>
+                </Pressable>
+              )}
+            </View>
           </View>
           <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
             <Pressable style={styles.plusButton} onPress={() => router.push('/settings')} accessibilityLabel="Settings">
@@ -385,52 +510,72 @@ export default function WalletScreen() {
           </View>
         </View>
 
-        {isDemo && (
-          <View style={styles.demoBanner}>
-            <Text style={styles.demoTitle}>Sample cards are included</Text>
-            <Text style={styles.demoText}>They remain alongside cards you add, as a comparison set. Remove them any time below.</Text>
-            <Pressable onPress={() => router.push('/add-card')} accessibilityRole="button"><Text style={styles.demoTitle}>Add a card →</Text></Pressable>
-            <Pressable onPress={removeSampleCards} accessibilityRole="button" accessibilityLabel="Remove sample cards"><Text style={styles.demoText}>Remove sample cards</Text></Pressable>
+        {/* Card Deck Area (Card Deck or Empty Deck Slot) */}
+        {cards.length === 0 ? (
+          <View style={styles.emptyDeckSlot}>
+            <View style={styles.emptyDeckIconCircle}>
+              <Text style={{ fontSize: 28 }}>💳</Text>
+            </View>
+            <Text style={styles.emptyDeckTitle}>{t.emptyTitle}</Text>
+            <Text style={styles.emptyDeckSubtitle}>{t.emptySubtitle}</Text>
+            <View style={styles.emptyDeckActions}>
+              <Pressable
+                style={styles.addFirstCardButton}
+                onPress={() => router.push('/add-card')}
+                accessibilityRole="button"
+                accessibilityLabel="Add your first card"
+              >
+                <Text style={styles.addFirstCardButtonText}>{t.addFirstCard}</Text>
+              </Pressable>
+              <Pressable
+                style={styles.loadDemoButton}
+                onPress={loadSampleCards}
+                accessibilityRole="button"
+                accessibilityLabel="Explore with sample cards"
+              >
+                <Text style={styles.loadDemoButtonText}>Load sample deck</Text>
+              </Pressable>
+            </View>
           </View>
-        )}
-        {cards.length === 0 && (
-          <Pressable style={styles.demoBanner} onPress={() => router.push('/add-card')}>
-            <Text style={styles.demoTitle}>No cards yet</Text>
-            <Text style={styles.demoText}>Add the cards you hold, or use Find My Card if you have none. Tap to add →</Text>
-          </Pressable>
+        ) : (
+          <GestureDetector gesture={panGesture}>
+            <Animated.View style={[styles.deckContainer, deckAnimatedStyle]}>
+              {cards.map((card, i) => (
+                <StackedCard
+                  key={card.id}
+                  card={card}
+                  index={i}
+                  dragProgress={dragProgress}
+                  totalCards={cards.length}
+                  selectedIndex={selectedIndex}
+                  onPress={() => handleCardPress(i)}
+                />
+              ))}
+            </Animated.View>
+          </GestureDetector>
         )}
 
-        {/* Card Deck (Immediately below header) */}
-        <GestureDetector gesture={panGesture}>
-          <Animated.View style={[styles.deckContainer, deckAnimatedStyle]}>
-            {cards.map((card, i) => (
-              <StackedCard
-                key={card.id}
-                card={card}
-                index={i}
-                dragProgress={dragProgress}
-                totalCards={cards.length}
-                selectedIndex={selectedIndex}
-                onPress={() => handleCardPress(i)}
-              />
-            ))}
-          </Animated.View>
-        </GestureDetector>
-
-        {/* Interaction Hint (Below deck) */}
+        {/* Interaction Hint (Always beneath deck area) */}
         <Animated.View style={[styles.hintPill, hintAnimatedStyle]}>
           <View style={styles.hintIconWrapper}>
             <Text style={styles.hintIcon}>💳</Text>
           </View>
           <Text style={styles.hintText}>
-            Swipe down to browse all cards. Swipe up to stack cards. Tap a card to open details.
+            {cards.length > 1
+              ? t.swipeHint
+              : cards.length === 1
+              ? 'Tap the card above to view details, update points, or check redemption routes.'
+              : 'Add your credit cards or explore with sample cards to track points and optimize rewards.'}
           </Text>
         </Animated.View>
 
-        {/* Rest of the Info (Below hint) */}
-        <Text style={styles.sectionTitle}>Your reward balances</Text>
+        {/* Expiry Banner */}
         <ExpiryBanner cards={cards} />
-        <PointsValueCard cards={cards} totalMin={totalMin} totalMax={totalMax} />
+
+        {/* Reward Balances (Always present) */}
+        <Text style={styles.sectionTitle}>{t.rewardBalances}</Text>
+        <PointsValueCard cards={cards} totalMin={totalMin} totalMax={totalMax} explainText={t.valueExplain} />
+
         <WalletMoneyLinks />
 
       </ScrollView>
@@ -442,16 +587,118 @@ export default function WalletScreen() {
 // Styles
 // ─────────────────────────────────────────────
 const styles = StyleSheet.create({
-  demoBanner: {
+  demoChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: 'rgba(245, 208, 111, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(245,208,111,0.35)',
-    backgroundColor: 'rgba(245,208,111,0.06)',
-    borderRadius: 14,
-    padding: 14,
+    borderColor: 'rgba(245, 208, 111, 0.3)',
+  },
+  demoChipText: {
+    fontFamily: typography.fontFamily,
+    color: colors.accent.goldStart,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  emptyDeckSlot: {
+    width: '100%',
+    minHeight: CARD_HEIGHT,
+    backgroundColor: '#111111',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(245, 208, 111, 0.25)',
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyDeckIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(245, 208, 111, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 208, 111, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  emptyDeckTitle: {
+    fontFamily: typography.fontFamily,
+    color: '#F5F5F5',
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  emptyDeckSubtitle: {
+    fontFamily: typography.fontFamily,
+    color: '#8E8E8E',
+    fontSize: 12,
+    lineHeight: 17,
+    textAlign: 'center',
+    maxWidth: 320,
     marginBottom: 16,
   },
-  demoTitle: { fontFamily: typography.fontFamily, color: colors.accent.goldStart, fontSize: 14, fontWeight: '700' },
-  demoText: { fontFamily: typography.fontFamily, color: '#B0B0B0', fontSize: 13, marginTop: 4, lineHeight: 18 },
+  emptyDeckActions: {
+    flexDirection: 'row',
+    gap: 10,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  addFirstCardButton: {
+    backgroundColor: colors.accent.goldStart,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addFirstCardButtonText: {
+    fontFamily: typography.fontFamily,
+    color: '#0A0A0A',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  loadDemoButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadDemoButtonText: {
+    fontFamily: typography.fontFamily,
+    color: '#E0E0E0',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  emptyProgrammeSlot: {
+    backgroundColor: '#161616',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#242424',
+    padding: 14,
+    marginTop: 14,
+    alignItems: 'center',
+  },
+  emptyProgrammeText: {
+    fontFamily: typography.fontFamily,
+    color: '#8A8A8A',
+    fontSize: 12,
+    lineHeight: 17,
+    textAlign: 'center',
+  },
+  emptyProgrammeAction: {
+    fontFamily: typography.fontFamily,
+    color: colors.accent.goldStart,
+    fontSize: 12,
+    fontWeight: '600',
+  },
   container: {
     flex: 1,
     backgroundColor: '#070707', // Reverted to black
@@ -680,6 +927,33 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily,
     color: '#9A9A9A',
     fontSize: 13,
+    marginTop: 2,
+  },
+  redemptionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 14,
+  },
+  redemptionPill: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: '#161616',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#242424',
+    padding: 10,
+  },
+  redemptionPillTitle: {
+    fontFamily: typography.fontFamily,
+    color: '#ECECEC',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  redemptionPillDesc: {
+    fontFamily: typography.fontFamily,
+    color: '#777777',
+    fontSize: 10,
     marginTop: 2,
   },
 

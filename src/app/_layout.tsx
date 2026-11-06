@@ -79,6 +79,12 @@ export default function RootLayout() {
         <Stack.Screen name="browse-cards" options={{ headerShown: false }} />
         <Stack.Screen name="goal" options={{ headerShown: false }} />
         <Stack.Screen name="missed-rewards" options={{ headerShown: false }} />
+        <Stack.Screen name="notifications" options={{ headerShown: false }} />
+        <Stack.Screen name="spends" options={{ headerShown: false }} />
+        <Stack.Screen name="scam-check" options={{ headerShown: false }} />
+        <Stack.Screen name="rights" options={{ headerShown: false }} />
+        <Stack.Screen name="family" options={{ headerShown: false }} />
+        <Stack.Screen name="build-credit" options={{ headerShown: false }} />
       </Stack>
       {showIntro && (
         <View style={StyleSheet.absoluteFill}>

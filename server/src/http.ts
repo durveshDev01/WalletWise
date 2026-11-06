@@ -10,7 +10,7 @@ import { handleAuraChat } from './routes/auraChat.ts';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type, Accept',
 };
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {

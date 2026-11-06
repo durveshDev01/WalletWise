@@ -43,6 +43,8 @@ describe('offline Aura: intents', () => {
     });
     assert.equal(matchOfflineIntent('Any changes to my cards?')?.kind, 'card_updates');
     assert.equal(matchOfflineIntent('How should I use my points?')?.kind, 'points_value');
+    assert.equal(matchOfflineIntent('What cards do I have?')!.kind, 'my_cards');
+    assert.equal(matchOfflineIntent('Show my cards')!.kind, 'my_cards');
     assert.equal(matchOfflineIntent('Tell me about Diners Black International'), null);
   });
 
@@ -53,6 +55,7 @@ describe('offline Aura: intents', () => {
     assert.equal(matchOfflineIntent('kaun sa card grocery ke liye')?.kind, 'best_card');
     assert.equal(matchOfflineIntent('मेरे पॉइंट्स की कीमत क्या है?')?.kind, 'points_value');
     assert.equal(matchOfflineIntent('मेरे कार्ड में कोई बदलाव?')?.kind, 'card_updates');
+    assert.equal(matchOfflineIntent('मेरे कार्ड्स दिखा')?.kind, 'my_cards');
   });
 
   it('assumes an amount only when none is given, and says so', () => {
@@ -111,6 +114,22 @@ describe('offline Aura: answers', () => {
     assert.equal(a.intent, 'card_updates');
     if (alerts.length > 0) assert.ok(a.text.includes(alerts[0].change.title), a.text);
     else assert.match(a.text, /No announced changes/);
+  });
+
+  it('includes wallet card context in best card recommendations', () => {
+    const a = answerOffline('Which card for dining?', ctx())!;
+    assert.equal(a.intent, 'best_card');
+    assert.match(a.text, /From your 3 wallet cards/);
+    assert.ok(a.text.includes('Infinia'));
+  });
+
+  it('lists cards and reward points in wallet for my_cards query', () => {
+    const a = answerOffline('What cards do I have?', ctx())!;
+    assert.equal(a.intent, 'my_cards');
+    assert.match(a.text, /You have 3 cards saved in your wallet/);
+    assert.ok(a.text.includes('Infinia'));
+    assert.ok(a.text.includes('BPCL SBI Card Octane'));
+    assert.ok(a.text.includes('24,000 points'));
   });
 
   it('says when the wallet is empty', () => {

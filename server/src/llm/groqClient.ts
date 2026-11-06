@@ -12,6 +12,32 @@ import { config } from '../config.ts';
 import { LLMBusyError, LLMConfigError, withBackoff } from './LLMClient.ts';
 import type { ChatMessage, ChatOptions, LLMClient, LLMStreamEvent, ToolCall, ToolDefinition } from './LLMClient.ts';
 
+function toGroqTool(t: ToolDefinition): Groq.Chat.ChatCompletionTool {
+  const schema = JSON.parse(JSON.stringify(t.parameters));
+  if (schema && typeof schema === 'object' && schema.properties) {
+    const req = new Set(Array.isArray(schema.required) ? schema.required : []);
+    for (const [propName, propDef] of Object.entries(schema.properties as Record<string, any>)) {
+      if (!req.has(propName) && propDef && typeof propDef === 'object') {
+        if (!propDef.anyOf) {
+          const { description, ...rest } = propDef;
+          schema.properties[propName] = {
+            anyOf: [rest, { type: 'null' }],
+            ...(description ? { description } : {}),
+          };
+        }
+      }
+    }
+  }
+  return {
+    type: 'function',
+    function: {
+      name: t.name,
+      description: t.description,
+      parameters: schema,
+    },
+  };
+}
+
 /** Groq chat completions (OpenAI-compatible) with tool calling and streaming. */
 export class GroqClient implements LLMClient {
   private readonly client: Groq;
@@ -26,31 +52,47 @@ export class GroqClient implements LLMClient {
   }
 
   async *chat(messages: ChatMessage[], tools: ToolDefinition[], options: ChatOptions = {}): AsyncIterable<LLMStreamEvent> {
+    const groqTools = tools.length > 0 ? tools.map(toGroqTool) : undefined;
+    const modelsToTry = [...new Set([this.model, 'llama-3.3-70b-versatile', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b'])];
+
     let stream;
-    try {
-      stream = await withBackoff(
-        () =>
-          this.client.chat.completions.create(
-            {
-              model: this.model,
-              messages: messages.map(toGroqMessage),
-              temperature: config.temperature,
-              stream: true,
-              ...(tools.length > 0
-                ? {
-                    tools: tools.map((t) => ({ type: 'function' as const, function: { name: t.name, description: t.description, parameters: t.parameters } })),
-                    tool_choice: options.toolChoice ?? 'auto',
-                  }
-                : {}),
-            },
-            { signal: options.signal },
-          ),
-        isRetryable,
-        config.llmMaxRetries,
-        options.signal,
-      );
-    } catch (error) {
-      throw mapError(error);
+    let lastError: unknown;
+    for (const model of modelsToTry) {
+      try {
+        stream = await withBackoff(
+          () =>
+            this.client.chat.completions.create(
+              {
+                model,
+                messages: messages.map(toGroqMessage),
+                temperature: config.temperature,
+                stream: true,
+                ...(groqTools
+                  ? {
+                      tools: groqTools,
+                      tool_choice: options.toolChoice ?? 'auto',
+                    }
+                  : {}),
+              },
+              { signal: options.signal },
+            ),
+          isRetryable,
+          config.llmMaxRetries,
+          options.signal,
+        );
+        break;
+      } catch (error) {
+        lastError = error;
+        if (error instanceof RateLimitError || error instanceof NotFoundError) {
+          console.warn(`[aura] Model ${model} returned ${error instanceof RateLimitError ? '429 RateLimit' : '404 NotFound'}; attempting fallback...`);
+          continue;
+        }
+        throw mapError(error);
+      }
+    }
+
+    if (!stream) {
+      throw mapError(lastError);
     }
 
     // Tool calls arrive in pieces (by index) and are only complete at the end of the stream.
@@ -97,7 +139,9 @@ function toGroqMessage(m: ChatMessage): Groq.Chat.ChatCompletionMessageParam {
   }
 }
 
-const isRetryable = (e: unknown) => e instanceof RateLimitError || e instanceof APIConnectionTimeoutError || e instanceof InternalServerError;
+// Do not retry 429 on the same model with backoff since Groq's TPM resets on a 60s window;
+// immediately cascade to the next model in modelsToTry instead.
+const isRetryable = (e: unknown) => e instanceof APIConnectionTimeoutError || e instanceof InternalServerError;
 
 function mapError(e: unknown): Error {
   if (e instanceof AuthenticationError || e instanceof PermissionDeniedError) return new LLMConfigError('Groq rejected the API key');

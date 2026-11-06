@@ -173,4 +173,11 @@ describe('spendTrends', () => {
   it('returns null when there are no logged spends', () => {
     assert.equal(spendTrends([], '2026-10'), null);
   });
+
+  it('returns null when there is only one month of spend history', () => {
+    const list = [
+      spend({ amount: 10000, category: 'GROCERY', cardId: 'h1', date: '2026-10-10' }),
+    ];
+    assert.equal(spendTrends(list, '2026-10'), null);
+  });
 });

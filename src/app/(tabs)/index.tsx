@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -20,6 +20,7 @@ import { catalog } from '../../data/catalog';
 import { walletAlerts } from '../../engine';
 import { useBillReminderSync } from '../../hooks/useBillReminderSync';
 import { useCardStore } from '../../store/useCardStore';
+import { UI_STRINGS } from '../../services/appStrings';
 import { theme } from '../../theme';
 
 /** Days ahead that count as a "new alert" on the bell. */
@@ -37,6 +38,14 @@ export default function HomeScreen() {
   const isDemo = useCardStore((s) => s.isDemo);
   useBillReminderSync();
 
+  // Pull-to-refresh: re-reads wallet alerts on demand.
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    // Store reads are synchronous; a short delay makes the spinner visible.
+    setTimeout(() => setRefreshing(false), 400);
+  }, []);
+
   const totals = useMemo(
     () => ({
       min: cards.reduce((acc, c) => acc + c.lowValue, 0),
@@ -46,8 +55,10 @@ export default function HomeScreen() {
     [cards],
   );
   const hasAlerts = useMemo(
-    () => walletAlerts(catalog, holdings.map((h) => h.catalogId), undefined, ALERT_WINDOW_DAYS).length > 0,
-    [holdings],
+    () =>
+      walletAlerts(catalog, holdings.map((h) => h.catalogId), undefined, ALERT_WINDOW_DAYS).length > 0 ||
+      cards.some((c) => c.expiryDays != null && c.expiryDays <= 60 && c.points > 0),
+    [holdings, cards],
   );
 
   const openCard = useCallback((id: string) => router.push({ pathname: '/card-detail', params: { id } }), [router]);
@@ -57,16 +68,19 @@ export default function HomeScreen() {
   );
   const openWallet = useCallback(() => router.push('/wallet'), [router]);
 
+  const language = useCardStore((s) => s.auraLanguage ?? 'en');
+  const t = UI_STRINGS[language].home;
+
   const quickActions: QuickAction[] = useMemo(
     () => [
-      { key: 'find', title: 'Find Next Card', icon: 'sparkle', onPress: () => router.push('/find-card') },
-      { key: 'trip', title: 'Trip Planner', icon: 'plane', onPress: () => router.push('/trip-planner') },
-      { key: 'nearby', title: 'Best Card Nearby', icon: 'pin', onPress: () => router.push('/map') },
-      { key: 'add', title: 'Add a Card', icon: 'plus', onPress: () => router.push('/add-card') },
-      { key: 'bill', title: 'Bill Check', icon: 'rupee', onPress: () => router.push('/bill-check') },
-      { key: 'browse', title: 'Browse Cards', icon: 'search', onPress: () => router.push('/browse-cards') },
+      { key: 'find', title: t.findNextCard, icon: 'sparkle', onPress: () => router.push('/find-card') },
+      { key: 'trip', title: t.tripPlanner, icon: 'plane', onPress: () => router.push('/trip-planner') },
+      { key: 'nearby', title: t.bestCardNearby, icon: 'pin', onPress: () => router.push('/map') },
+      { key: 'add', title: t.addCard, icon: 'plus', onPress: () => router.push('/add-card') },
+      { key: 'bill', title: t.billCheck, icon: 'rupee', onPress: () => router.push('/bill-check') },
+      { key: 'browse', title: t.browseCards, icon: 'search', onPress: () => router.push('/browse-cards') },
     ],
-    [router],
+    [router, t],
   );
 
   return (
@@ -85,6 +99,14 @@ export default function HomeScreen() {
           // Leave room for the floating tab bar.
           { paddingBottom: insets.bottom + theme.sizes.tabBarHeight + theme.spacing.lg },
         ]}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.colors.gold}
+            colors={[theme.colors.gold]}
+          />
+        }
       >
         <HeroCard
           totalMin={totals.min}
@@ -102,12 +124,12 @@ export default function HomeScreen() {
         <BillCheckBanner onPress={() => router.push('/bill-check')} />
 
         <View>
-          <SectionHeader title="Quick actions" />
+          <SectionHeader title={t.quickActions} />
           <QuickActions actions={quickActions} />
         </View>
 
         <View>
-          <SectionHeader title="Which card should I use?" />
+          <SectionHeader title={t.whichCard} />
           <CardCalculator cards={cards} onCompareNearby={() => router.push('/map')} />
         </View>
 

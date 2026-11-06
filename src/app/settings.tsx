@@ -33,11 +33,14 @@ export default function SettingsScreen() {
   const [email, setEmail] = useState('');
   const [syncMessage, setSyncMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [cooldownSec, setCooldownSec] = useState(0);
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [signedInEmail, setSignedInEmail] = useState<string | null>(null);
   const [backupStatus, setBackupStatus] = useState<{ exists: boolean; updatedAt: string | null; unlocked: boolean } | null>(null);
   const [backupStatusMessage, setBackupStatusMessage] = useState('');
   const [backupPassphrase, setBackupPassphrase] = useState('');
   const [confirmPassphrase, setConfirmPassphrase] = useState('');
+  const [showPassphrase, setShowPassphrase] = useState(false);
   const linkingUrl = Linking.useLinkingURL();
   const { code: routeCode } = useLocalSearchParams<{ code?: string }>();
   const processedCallback = useRef<string | null>(null);
@@ -101,19 +104,49 @@ export default function SettingsScreen() {
       setSignedInEmail(data.user?.email ?? data.session?.user.email ?? null);
       setSyncMessage('Signed in. Your wallet remains on this device until you create an encrypted backup.');
       await refreshBackupStatus();
-      router.replace('/settings');
+      // Do NOT call router.replace here — it unmounts this screen and re-mounts it,
+      // which re-triggers the deep-link useEffect and causes a navigation loop.
     }).catch((error: unknown) => {
       setSyncMessage(error instanceof Error ? error.message : 'Could not complete sign-in. Request a fresh email link.');
     });
   }, [linkingUrl, routeCode, router, refreshBackupStatus]);
 
+  // Clear the countdown interval when the component unmounts.
+  useEffect(() => () => { if (cooldownRef.current) clearInterval(cooldownRef.current); }, []);
+
+  const startCooldown = (seconds = 60) => {
+    setCooldownSec(seconds);
+    if (cooldownRef.current) clearInterval(cooldownRef.current);
+    cooldownRef.current = setInterval(() => {
+      setCooldownSec((prev) => {
+        if (prev <= 1) {
+          if (cooldownRef.current) { clearInterval(cooldownRef.current); cooldownRef.current = null; }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
   const sendSignInLink = async () => {
     if (!supabase) return setSyncMessage('Cloud backup is not configured in this build.');
+    if (cooldownSec > 0) return; // debounce — already waiting
     setBusy(true);
     try {
       const emailRedirectTo = Platform.OS === 'web' ? `${window.location.origin}/settings` : Linking.createURL('settings');
       const { error } = await supabase.auth.signInWithOtp({ email: email.trim(), options: { shouldCreateUser: true, emailRedirectTo } });
-      setSyncMessage(error ? error.message : 'Check your email and open the sign-in link on this device.');
+      if (error) {
+        const isRate = error.message.toLowerCase().includes('rate') || (error as any).status === 429;
+        if (isRate) {
+          setSyncMessage('Supabase email rate limit exceeded (free tier allows 3 emails/hour). Check your inbox for any previous magic link or wait before retrying.');
+          startCooldown(120);
+        } else {
+          setSyncMessage(error.message);
+        }
+      } else {
+        setSyncMessage('Check your email and tap the sign-in link on this device.');
+        startCooldown(60);
+      }
     } catch (error) {
       setSyncMessage(error instanceof Error ? error.message : 'Could not send a sign-in link.');
     } finally {
@@ -149,7 +182,7 @@ export default function SettingsScreen() {
       if (!result || typeof result.snapshot !== 'object' || !result.snapshot) { setSyncMessage('No encrypted cloud backup found for this account.'); return; }
       const saved = result.snapshot;
       const applyRestore = () => {
-        useCardStore.setState(saved as Partial<ReturnType<typeof useCardStore.getState>>);
+        useCardStore.getState().restoreSnapshot(saved as Record<string, unknown>);
         setSyncMessage('Cloud backup restored to this device.');
       };
       if (Platform.OS === 'web') {
@@ -272,14 +305,21 @@ export default function SettingsScreen() {
             ? `Encrypted cloud backup found${backupStatus.updatedAt ? ` · updated ${new Date(backupStatus.updatedAt).toLocaleString()}` : ''}${backupStatus.unlocked ? ' · unlocked on this device' : ' · enter its passphrase to restore or update'}`
             : backupStatus ? 'No cloud backup exists yet. Your current wallet is still only on this device.' : 'Checking cloud backup status…')}</Text>
           {!!backupStatusMessage && <Pressable disabled={busy} onPress={() => void refreshBackupStatus()} style={styles.action}><Text style={styles.actionText}>Check again</Text></Pressable>}
-          <TextInput secureTextEntry value={backupPassphrase} onChangeText={setBackupPassphrase} placeholder={backupStatus?.exists ? 'Backup passphrase' : 'Create backup passphrase (12+ characters)'} placeholderTextColor={theme.colors.textMuted} style={styles.input} autoCapitalize="none" />
-          {!backupStatus?.exists && <TextInput secureTextEntry value={confirmPassphrase} onChangeText={setConfirmPassphrase} placeholder="Confirm backup passphrase" placeholderTextColor={theme.colors.textMuted} style={styles.input} autoCapitalize="none" />}
+          <TextInput secureTextEntry={!showPassphrase} value={backupPassphrase} onChangeText={setBackupPassphrase} placeholder={backupStatus?.exists ? 'Backup passphrase' : 'Create backup passphrase (12+ characters)'} placeholderTextColor={theme.colors.textMuted} style={styles.input} autoCapitalize="none" />
+          {!backupStatus?.exists && <TextInput secureTextEntry={!showPassphrase} value={confirmPassphrase} onChangeText={setConfirmPassphrase} placeholder="Confirm backup passphrase" placeholderTextColor={theme.colors.textMuted} style={styles.input} autoCapitalize="none" />}
+          <Pressable onPress={() => setShowPassphrase((v) => !v)} accessibilityRole="button" style={{ alignSelf: 'flex-end', paddingVertical: 4 }}>
+            <Text style={[theme.text.caption, { color: theme.colors.gold }]}>{showPassphrase ? 'Hide passphrase' : 'Show passphrase'}</Text>
+          </Pressable>
           <Pressable disabled={busy || !backupStatus || (!backupPassphrase && !backupStatus.unlocked)} onPress={backup} style={styles.action}><Text style={styles.actionText}>{backupStatus?.exists ? 'Encrypt and update cloud backup' : 'Encrypt and back up this device'}</Text></Pressable>
           {backupStatus?.exists && <Pressable disabled={busy || !backupPassphrase} onPress={restore} style={styles.action}><Text style={styles.actionText}>Decrypt and restore cloud backup</Text></Pressable>}
           <Pressable onPress={signOut} style={styles.action}><Text style={styles.actionText}>Sign out</Text></Pressable>
         </> : <>
           <TextInput autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} placeholder="Email address" placeholderTextColor={theme.colors.textMuted} style={styles.input} />
-          <Pressable disabled={busy || !email.trim()} onPress={sendSignInLink} style={styles.action}><Text style={styles.actionText}>Email me a sign-in link</Text></Pressable>
+          <Pressable disabled={busy || !email.trim() || cooldownSec > 0} onPress={sendSignInLink} style={[styles.action, (cooldownSec > 0) && styles.actionDisabled]}>
+            <Text style={styles.actionText}>
+              {cooldownSec > 0 ? `Resend available in ${cooldownSec}s` : 'Email me a sign-in link'}
+            </Text>
+          </Pressable>
         </>}
         {!!syncMessage && <Text accessibilityRole="alert" style={theme.text.caption}>{syncMessage}</Text>}
       </View>
@@ -308,6 +348,7 @@ const styles = StyleSheet.create({
   pressed: { backgroundColor: theme.colors.pressed },
   input: { minHeight: theme.sizes.touch, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, color: theme.colors.textPrimary, paddingHorizontal: theme.spacing.md },
   action: { minHeight: theme.sizes.touch, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.goldBorder, justifyContent: 'center', alignItems: 'center', paddingHorizontal: theme.spacing.md },
+  actionDisabled: { borderColor: theme.colors.border, opacity: 0.5 },
   actionText: { color: theme.colors.gold, fontWeight: '700' },
   segment: { flexDirection: 'row', padding: theme.spacing.xs, borderRadius: theme.radius.md, backgroundColor: theme.colors.background },
   segmentItem: { flex: 1, minHeight: theme.sizes.touch, alignItems: 'center', justifyContent: 'center', borderRadius: theme.radius.sm },

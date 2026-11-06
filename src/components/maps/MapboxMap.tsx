@@ -87,6 +87,10 @@ export const MapboxMap = forwardRef<MapboxMapHandle, Props>(function MapboxMap(
         containerStyle={styles.web}
         onError={() => setFailed('No connection to the map')}
         androidLayerType="hardware"
+        onShouldStartLoadWithRequest={(request) => {
+          // Allow initial local page load, block any external links (e.g. Mapbox website)
+          return request.url === 'about:blank' || request.url.startsWith('https://walletwise.app') || request.url.startsWith('data:');
+        }}
       />
       {failed && !ready && (
         <View style={styles.overlay} pointerEvents="none">

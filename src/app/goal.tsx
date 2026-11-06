@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { progressFor } from '../components/home/GoalCard';
 import { Body, Chips, inr, Label, MoneyInput, MoneyScreen, Panel, PrimaryButton, StatRow, toNumber } from '../components/money/MoneyUi';
@@ -40,11 +40,18 @@ export default function GoalScreen() {
     setPicked([]);
     setAdding(false);
   };
-  const confirmRemove = (g: Goal) =>
+  const confirmRemove = (g: Goal) => {
+    const doRemove = () => removeGoal(g.id);
+    if (Platform.OS === 'web') {
+      const ok = typeof window !== 'undefined' ? window.confirm(`Remove goal "${g.name}"?`) : true;
+      if (ok) doRemove();
+      return;
+    }
     Alert.alert('Remove goal?', `"${g.name}" will be removed. Your points are not touched.`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => removeGoal(g.id) },
+      { text: 'Remove', style: 'destructive', onPress: doRemove },
     ]);
+  };
 
   return (
     <MoneyScreen title="Points goals" sub="Save your points for something you want: a trip, a phone, Diwali gifts or a bill credit.">

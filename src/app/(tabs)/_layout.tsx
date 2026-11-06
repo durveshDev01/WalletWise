@@ -15,6 +15,7 @@ import { theme } from '../../theme';
 import { Icon } from '../../components/Icon';
 import type { IconName } from '../../components/Icon';
 import { useCardStore } from '../../store/useCardStore';
+import { UI_STRINGS } from '../../services/appStrings';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -63,7 +64,7 @@ function TabItem({ route, isFocused, options, onPress }: any) {
   );
 }
 
-function CenterAuraButton({ onPress, isFocused }: any) {
+function CenterAuraButton({ onPress, isFocused, label }: any) {
   const pressScale = useSharedValue(1);
   const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: pressScale.value }] }));
 
@@ -82,7 +83,7 @@ function CenterAuraButton({ onPress, isFocused }: any) {
           <Icon name="sparkle" color={theme.colors.gold} size={theme.sizes.iconLarge} />
         </LinearGradient>
       </AnimatedPressable>
-      <Text style={[theme.text.caption, styles.tabLabel, { color: isFocused ? theme.colors.gold : theme.colors.textMuted }]}>Aura</Text>
+      <Text style={[theme.text.caption, styles.tabLabel, { color: isFocused ? theme.colors.gold : theme.colors.textMuted }]}>{label ?? 'Aura'}</Text>
     </View>
   );
 }
@@ -109,7 +110,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
           };
 
           if (route.name === 'aura') {
-            return <CenterAuraButton key={route.key} onPress={onPress} isFocused={isFocused} />;
+            return <CenterAuraButton key={route.key} onPress={onPress} isFocused={isFocused} label={options.title} />;
           }
           return <TabItem key={route.key} route={route} isFocused={isFocused} options={options} onPress={onPress} />;
         })}
@@ -119,13 +120,16 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 }
 
 export default function AppTabs() {
+  const language = useCardStore((s) => s.auraLanguage ?? 'en');
+  const t = UI_STRINGS[language].tabs;
+
   return (
     <Tabs tabBar={(props) => <CustomTabBar {...props} />} screenOptions={{ headerShown: false }}>
-      <Tabs.Screen name="index" options={{ title: 'Home' }} />
-      <Tabs.Screen name="map" options={{ title: 'Best Card' }} />
-      <Tabs.Screen name="aura" options={{ title: 'Aura' }} />
-      <Tabs.Screen name="learn" options={{ title: 'Learn' }} />
-      <Tabs.Screen name="wallet" options={{ title: 'Wallet' }} />
+      <Tabs.Screen name="index" options={{ title: t.home }} />
+      <Tabs.Screen name="map" options={{ title: t.map }} />
+      <Tabs.Screen name="aura" options={{ title: t.aura }} />
+      <Tabs.Screen name="learn" options={{ title: t.learn }} />
+      <Tabs.Screen name="wallet" options={{ title: t.wallet }} />
     </Tabs>
   );
 }

@@ -9,6 +9,7 @@ type Props = {
   name: string;
   network?: string;
   tier?: string;
+  lastFour?: string;
   /** Compact layout for thumbnails. */
   small?: boolean;
 };
@@ -40,6 +41,13 @@ const TIER_ACCENT: Record<string, string> = {
   ENTRY: '#9AA7B5',
 };
 
+const NETWORK_LABEL: Record<string, string> = {
+  VISA: 'VISA',
+  MASTERCARD: 'Mastercard',
+  RUPAY: 'RuPay',
+  AMEX: 'American Express',
+};
+
 /** Strips the bank name and "Credit Card" so the face shows the product name. */
 export function shortCardName(name: string, issuer: string) {
   return name
@@ -49,23 +57,59 @@ export function shortCardName(name: string, issuer: string) {
     .trim();
 }
 
-export function CardFace({ issuer, name, network, tier, small }: Props) {
+export function CardFace({ issuer, name, network, tier, lastFour, small }: Props) {
   const colors = ISSUER_COLORS[issuer] ?? DEFAULT_COLORS;
   const accent = TIER_ACCENT[tier ?? ''] ?? '#C9C9C9';
+  const networkLabel = network ? (NETWORK_LABEL[network] ?? network) : null;
+
+  if (small) {
+    return (
+      <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.faceSmall}>
+        <Text style={[styles.issuerSmall, { color: accent }]} numberOfLines={1}>{issuer}</Text>
+        <Text style={styles.nameSmall} numberOfLines={2}>{shortCardName(name, issuer) || name}</Text>
+      </LinearGradient>
+    );
+  }
+
   return (
-    <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.face, small && styles.faceSmall]}>
+    <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.face}>
+      {/* Diagonal gloss overlay */}
+      <LinearGradient
+        colors={['rgba(255,255,255,0.10)', 'rgba(255,255,255,0.00)', 'rgba(255,255,255,0.05)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gloss}
+        pointerEvents="none"
+      />
+
+      {/* Top row: issuer name + NFC icon */}
       <View style={styles.topRow}>
-        <Text style={[styles.issuer, small && styles.issuerSmall, { color: accent }]} numberOfLines={1}>
-          {issuer}
-        </Text>
-        {!small && <View style={[styles.chip, { borderColor: accent }]} />}
+        <Text style={[styles.issuer, { color: accent }]} numberOfLines={1}>{issuer}</Text>
+        {/* NFC contactless symbol */}
+        <Text style={[styles.nfc, { color: accent }]}>))))</Text>
       </View>
-      <View>
-        <Text style={[styles.name, small && styles.nameSmall]} numberOfLines={2}>
-          {shortCardName(name, issuer) || name}
-        </Text>
-        {!!network && (
-          <Text style={[styles.network, small && styles.networkSmall]}>{network === 'AMEX' ? 'AMERICAN EXPRESS' : network}</Text>
+
+      {/* EMV Chip */}
+      <View style={[styles.chip, { borderColor: accent }]}>
+        <View style={[styles.chipLine, { backgroundColor: accent, opacity: 0.5 }]} />
+        <View style={[styles.chipCenter, { borderColor: accent }]}>
+          <View style={[styles.chipCenterDot, { backgroundColor: accent, opacity: 0.4 }]} />
+        </View>
+        <View style={[styles.chipLine, { backgroundColor: accent, opacity: 0.5 }]} />
+      </View>
+
+      {/* Card number placeholder */}
+      <Text style={[styles.cardNumber, { color: accent, opacity: 0.75 }]}>
+        {`•••• •••• •••• ${lastFour ?? '••••'}`}
+      </Text>
+
+      {/* Bottom: card name + network badge */}
+      <View style={styles.bottomRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.name} numberOfLines={2}>{shortCardName(name, issuer) || name}</Text>
+        </View>
+        {networkLabel && (
+          <Text style={[styles.network, { color: accent }]}>{networkLabel}</Text>
         )}
       </View>
     </LinearGradient>
@@ -76,18 +120,50 @@ const styles = StyleSheet.create({
   face: {
     flex: 1,
     borderRadius: 16,
-    padding: 18,
+    padding: 20,
     justifyContent: 'space-between',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
+    overflow: 'hidden',
   },
-  faceSmall: { borderRadius: 8, padding: 6 },
+  faceSmall: { borderRadius: 8, padding: 6, flex: 1, justifyContent: 'space-between' },
+  gloss: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    borderRadius: 16,
+  },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  issuer: { fontFamily: typography.fontFamily, fontSize: 14, fontWeight: '800', letterSpacing: 1.5 },
-  issuerSmall: { fontSize: 8, letterSpacing: 0.5 },
-  chip: { width: 34, height: 26, borderRadius: 5, borderWidth: 1.5, backgroundColor: 'rgba(245,208,111,0.18)' },
-  name: { fontFamily: typography.fontFamily, color: '#F5F5F5', fontSize: 20, fontWeight: '600', letterSpacing: -0.3 },
-  nameSmall: { fontSize: 9, letterSpacing: 0 },
-  network: { fontFamily: typography.fontFamily, color: 'rgba(245,245,245,0.6)', fontSize: 11, fontWeight: '700', letterSpacing: 2, marginTop: 6 },
-  networkSmall: { fontSize: 6, letterSpacing: 1, marginTop: 2 },
+  bottomRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
+  issuer: { fontFamily: typography.fontFamily, fontSize: 13, fontWeight: '800', letterSpacing: 1.5 },
+  issuerSmall: { fontFamily: typography.fontFamily, fontSize: 8, fontWeight: '800', letterSpacing: 0.5 },
+  nfc: { fontSize: 18, fontWeight: '300', letterSpacing: -4, opacity: 0.9 },
+  // EMV chip
+  chip: {
+    width: 42, height: 32, borderRadius: 5,
+    borderWidth: 1.5,
+    backgroundColor: 'rgba(220,185,100,0.18)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    marginTop: 10,
+    overflow: 'hidden',
+  },
+  chipLine: { width: 3, height: '80%', borderRadius: 2 },
+  chipCenter: {
+    flex: 1, height: '75%', marginHorizontal: 3,
+    borderWidth: 1, borderRadius: 3,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  chipCenterDot: { width: 8, height: 8, borderRadius: 4 },
+  cardNumber: {
+    fontFamily: typography.fontFamily, fontSize: 15, fontWeight: '600',
+    letterSpacing: 2.5, marginTop: 10,
+  },
+  name: { fontFamily: typography.fontFamily, color: '#F5F5F5', fontSize: 18, fontWeight: '600', letterSpacing: -0.3 },
+  nameSmall: { fontFamily: typography.fontFamily, color: '#F5F5F5', fontSize: 9, letterSpacing: 0 },
+  network: {
+    fontFamily: typography.fontFamily, fontSize: 11, fontWeight: '800',
+    letterSpacing: 1.5, textAlign: 'right', maxWidth: 100,
+  },
 });

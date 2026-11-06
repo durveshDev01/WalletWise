@@ -85,6 +85,14 @@ export function billReminders(dueDay: number, from: Date, monthsAhead = REMINDER
     .slice(0, monthsAhead * REMINDER_DAYS_BEFORE.length);
 }
 
+/** Formats a date for bill display, e.g. "12 Nov" or "5 Jan 2027". */
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
+export function formatDueDate(d: Date, from: Date = new Date()): string {
+  const dayNum = d.getDate();
+  const month = SHORT_MONTHS[d.getMonth()] ?? '';
+  return d.getFullYear() !== from.getFullYear() ? `${dayNum} ${month} ${d.getFullYear()}` : `${dayNum} ${month}`;
+}
+
 /** Local date as YYYY-MM-DD (used in notification ids). */
 export function localIsoDate(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -97,3 +105,51 @@ export function ordinalDay(day: number): string {
   const suffix = tens >= 11 && tens <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[day % 10] ?? 'th';
   return `${day}${suffix}`;
 }
+
+/**
+ * Calculates remaining whole days until an ISO date (YYYY-MM-DD).
+ * Returns null if no valid date string, or whole days from `from` to the target date.
+ * If the target date has passed, returns 0.
+ */
+export function daysUntilExpiry(expiryDate: string | undefined | null, from: Date = new Date()): number | null {
+  if (!expiryDate || typeof expiryDate !== 'string') return null;
+  const parts = expiryDate.split('-').map(Number);
+  if (parts.length !== 3 || parts.some((p) => isNaN(p) || p <= 0)) return null;
+  const [year, month, dayNum] = parts;
+  const target = new Date(year, month - 1, dayNum);
+  if (isNaN(target.getTime())) return null;
+  const today = startOfDay(from);
+  const diffDays = Math.round((target.getTime() - today.getTime()) / 86_400_000);
+  return Math.max(0, diffDays);
+}
+
+/**
+ * Returns an ISO date string (YYYY-MM-DD) that is `days` days in the future from `from`.
+ */
+export function dateInDays(days: number, from: Date = new Date()): string {
+  const d = new Date(from.getFullYear(), from.getMonth(), from.getDate() + days);
+  return localIsoDate(d);
+}
+
+/**
+ * Computes the points expiry date for a card given its policy and the date points were earned.
+ * Returns null when the policy says points never expire.
+ *
+ * @param policy  - The card's `pointsExpiry` block from the catalog.
+ * @param earnedAt - ISO date (YYYY-MM-DD) when the balance was last recorded (approximated as today for existing points).
+ */
+export function computePointsExpiryDate(
+  policy: { neverExpires: boolean; validityMonths: number | null; alignToMonthEnd: boolean } | undefined | null,
+  earnedAt: Date = new Date(),
+): string | null {
+  if (!policy || policy.neverExpires || policy.validityMonths == null) return null;
+  // Add validityMonths to the earnedAt date
+  const expiry = new Date(earnedAt.getFullYear(), earnedAt.getMonth() + policy.validityMonths, earnedAt.getDate());
+  if (policy.alignToMonthEnd) {
+    // Last day of the target month
+    const lastDay = new Date(expiry.getFullYear(), expiry.getMonth() + 1, 0);
+    return localIsoDate(lastDay);
+  }
+  return localIsoDate(expiry);
+}
+

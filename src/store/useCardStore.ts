@@ -4,6 +4,9 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { catalog } from '../data/catalog';
 import {
   CATEGORY_LABELS,
+  computePointsExpiryDate,
+  dateInDays,
+  daysUntilExpiry,
   devaluationRisk,
   pointsValue,
   redemptionRoutes,
@@ -22,6 +25,9 @@ export type CardData = {
   cardName: string;
   lastFour: string;
   points: number;
+  /** Target expiration date (YYYY-MM-DD) if configured. */
+  expiryDate?: string;
+  /** Dynamically computed remaining days until expiryDate. */
   expiryDays?: number;
   lowValue: number;
   highValue: number;
@@ -39,6 +45,7 @@ export type CardData = {
   milestones: string[];
   rewardCategories: string[];
   loungeAccess: string;
+  pointsExpiry?: Card['pointsExpiry'];
   intelligence: {
     bestFor: string;
     bestCategory: string;
@@ -56,6 +63,9 @@ export type Holding = {
   cardName: string;
   lastFour: string;
   points: number;
+  /** Target expiration date in YYYY-MM-DD. */
+  expiryDate?: string;
+  /** Optional legacy/manual days input. */
   expiryDays?: number;
   /** Day of the month the statement is made (1 to 31). Optional, set by the user. */
   statementDay?: number;
@@ -128,6 +138,15 @@ export function toCardData(h: Holding): CardData {
   const annual = walletValue(catalog, [card], DEFAULT_PROFILE);
   const { risk } = devaluationRisk(catalog, card.id);
 
+  let expiryDate = h.expiryDate;
+  if (!expiryDate && h.id === '2' && isSampleHolding(h)) {
+    expiryDate = dateInDays(18);
+  }
+  if (!expiryDate && card.pointsExpiry && !card.pointsExpiry.neverExpires) {
+    expiryDate = computePointsExpiryDate(card.pointsExpiry) ?? undefined;
+  }
+  const expiryDays = expiryDate ? daysUntilExpiry(expiryDate) ?? undefined : h.expiryDays;
+
   return {
     id: h.id,
     catalogId: card.id,
@@ -135,7 +154,8 @@ export function toCardData(h: Holding): CardData {
     cardName: h.cardName,
     lastFour: h.lastFour,
     points: h.points,
-    expiryDays: h.expiryDays,
+    expiryDate,
+    expiryDays,
     lowValue: value.low,
     highValue: value.high,
     valueRoute: value.bestRoute.label,
@@ -162,6 +182,7 @@ export function toCardData(h: Holding): CardData {
     milestones: card.perks.includes('MILESTONE_BONUS') ? ['Milestone bonuses on yearly spend (check current issuer terms)'] : [],
     rewardCategories: [...new Set(card.rewards.filter((r) => r.category !== 'DEFAULT').map((r) => CATEGORY_LABELS[r.category]))],
     loungeAccess: loungeText(card),
+    pointsExpiry: card.pointsExpiry,
     intelligence: {
       bestFor: top?.label ?? 'Everyday spends',
       bestCategory: top?.detail ?? 'Everyday spends',
@@ -174,13 +195,20 @@ export function toCardData(h: Holding): CardData {
 // Demo wallet. Point balances are sample values until the user enters their own.
 const DEMO_HOLDINGS: Holding[] = [
   { id: '1', catalogId: 'hdfc-infinia', bankName: 'HDFC BANK', cardName: 'Infinia', lastFour: '4920', points: 24000 },
-  { id: '2', catalogId: 'sbi-bpcl-octane', bankName: 'SBI CARD', cardName: 'BPCL Octane', lastFour: '8821', points: 4200, expiryDays: 18 },
+  { id: '2', catalogId: 'sbi-bpcl-octane', bankName: 'SBI CARD', cardName: 'BPCL Octane', lastFour: '8821', points: 4200, expiryDate: dateInDays(18) },
   { id: '3', catalogId: 'amex-platinum-travel', bankName: 'AMERICAN EXPRESS', cardName: 'Platinum Travel', lastFour: '1234', points: 15000 },
   { id: '4', catalogId: 'hdfc-regalia-gold', bankName: 'HDFC BANK', cardName: 'Regalia Gold', lastFour: '5678', points: 32000 },
   { id: '5', catalogId: 'hdfc-marriott-bonvoy', bankName: 'HDFC BANK', cardName: 'Marriott Bonvoy', lastFour: '9012', points: 18000 },
 ];
 const DEMO_HOLDING_IDS = new Set(DEMO_HOLDINGS.map((holding) => holding.id));
-export const isSampleHolding = (holding: Pick<Holding, 'id'>) => DEMO_HOLDING_IDS.has(holding.id);
+const DEMO_CATALOG_IDS = new Set(DEMO_HOLDINGS.map((h) => h.catalogId));
+const DEMO_SAMPLE_LAST_FOURS = new Set(['4920', '8821', '1234', '5678', '9012']);
+
+export const isSampleHolding = (h: Pick<Holding, 'id'> & Partial<Pick<Holding, 'catalogId' | 'lastFour'>>) =>
+  DEMO_HOLDING_IDS.has(h.id) ||
+  h.id.length <= 2 ||
+  h.id.startsWith('demo-') ||
+  (h.catalogId != null && DEMO_CATALOG_IDS.has(h.catalogId) && h.lastFour != null && DEMO_SAMPLE_LAST_FOURS.has(h.lastFour));
 
 /** Random id for this install. Sent to the Aura server only for rate limiting. */
 const newUserId = () => `u-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -195,10 +223,10 @@ interface CardStore {
   /** Set once the user has answered the Find My Card questions. */
   profileSaved: boolean;
   setProfile: (profile: UserProfile) => void;
-  addCard: (catalogId: string, lastFour: string, points: number, billDays?: Pick<Holding, 'statementDay' | 'dueDay'>) => void;
+  addCard: (catalogId: string, lastFour: string, points: number, billDays?: Pick<Holding, 'statementDay' | 'dueDay' | 'expiryDate' | 'expiryDays'>) => void;
   updateHolding: (
     id: string,
-    changes: Partial<Pick<Holding, 'lastFour' | 'points' | 'expiryDays' | 'statementDay' | 'dueDay'>>,
+    changes: Partial<Pick<Holding, 'lastFour' | 'points' | 'expiryDays' | 'expiryDate' | 'statementDay' | 'dueDay'>>,
   ) => void;
   removeHolding: (id: string) => void;
   clearDemo: () => void;
@@ -234,6 +262,10 @@ interface CardStore {
   removeSpend: (id: string) => void;
   /** Adds cards from a "Share my wallet" code. The first real cards replace the demo wallet. */
   importCards: (cards: { catalogId: string; lastFour: string; points: number }[]) => void;
+  /** Restores a full wallet state from an encrypted cloud backup and recalculates cards. */
+  restoreSnapshot: (saved: Record<string, unknown>) => void;
+  /** Restores the 5 comparison sample cards for testing and comparison. */
+  loadSampleCards: () => void;
 }
 
 const derive = (holdings: Holding[]) => holdings.flatMap((h) => (catalog.byId.has(h.catalogId) ? [toCardData(h)] : []));
@@ -264,25 +296,71 @@ export const useCardStore = create<CardStore>()(
       setProfile: (profile) => set({ profile, profileSaved: true }),
       addCard: (catalogId, lastFour, points, billDays) =>
         set((s) => {
-          // Keep samples visible until the user explicitly removes them.
-          const holdings = [...s.holdings, { ...newHolding(catalogId, lastFour, points), ...billDays }];
-          return { holdings, cards: derive(holdings), isDemo: s.isDemo };
+          let extra = { ...billDays };
+          if (extra.expiryDays != null && extra.expiryDays > 0 && !extra.expiryDate) {
+            extra.expiryDate = dateInDays(extra.expiryDays);
+          } else if (!extra.expiryDate) {
+            const cat = catalog.byId.get(catalogId);
+            if (cat?.pointsExpiry && !cat.pointsExpiry.neverExpires) {
+              const autoExp = computePointsExpiryDate(cat.pointsExpiry);
+              if (autoExp) extra.expiryDate = autoExp;
+            }
+          }
+          // If the wallet only holds the initial sample deck, adding the user's first real card
+          // clears the sample cards so their wallet is immediately clean and personal.
+          const nonSample = s.holdings.filter((h) => !isSampleHolding(h));
+          const newCard = { ...newHolding(catalogId, lastFour, points), ...extra };
+          const holdings = s.isDemo && nonSample.length === 0 ? [newCard] : [...s.holdings, newCard];
+          return { holdings, cards: derive(holdings), isDemo: false };
         }),
       updateHolding: (id, changes) =>
         set((s) => {
-          const holdings = s.holdings.map((h) => (h.id === id ? { ...h, ...changes } : h));
+          const holdings = s.holdings.map((h) => {
+            if (h.id !== id) return h;
+            const updated = { ...h, ...changes };
+            if (updated.expiryDays != null && updated.expiryDays > 0 && !changes.expiryDate) {
+              updated.expiryDate = dateInDays(updated.expiryDays);
+            } else if (changes.points != null && !changes.expiryDate && !h.expiryDate) {
+              const cat = catalog.byId.get(h.catalogId);
+              if (cat?.pointsExpiry && !cat.pointsExpiry.neverExpires) {
+                const autoExp = computePointsExpiryDate(cat.pointsExpiry);
+                if (autoExp) updated.expiryDate = autoExp;
+              }
+            }
+            return updated;
+          });
           return { holdings, cards: derive(holdings) };
         }),
       removeHolding: (id) =>
         set((s) => {
           const holdings = s.holdings.filter((h) => h.id !== id);
-          return { holdings, cards: derive(holdings) };
+          const hasSample = holdings.some((h) => DEMO_HOLDING_IDS.has(h.id));
+          return { holdings, cards: derive(holdings), isDemo: hasSample && s.isDemo };
         }),
       clearDemo: () => set({ holdings: [], cards: [], isDemo: false }),
+      restoreSnapshot: (saved) =>
+        set((current) => {
+          const snapshot = (saved ?? {}) as Partial<CardStore>;
+          const holdings = (Array.isArray(snapshot.holdings) ? snapshot.holdings : current.holdings) as Holding[];
+          return {
+            ...current,
+            ...snapshot,
+            holdings,
+            cards: derive(holdings),
+            isDemo: snapshot.isDemo ?? holdings.some((h) => isSampleHolding(h)),
+          };
+        }),
       removeSampleCards: () => set((s) => {
-        const sampleIds = new Set(DEMO_HOLDINGS.map((h) => h.id));
-        const holdings = s.holdings.filter((h) => !sampleIds.has(h.id));
+        let holdings = s.holdings.filter((h) => !isSampleHolding(h));
+        if (holdings.length === s.holdings.length && s.isDemo) {
+          holdings = [];
+        }
         return { holdings, cards: derive(holdings), isDemo: false };
+      }),
+      loadSampleCards: () => set((s) => {
+        const nonSampleHoldings = s.holdings.filter((h) => !isSampleHolding(h));
+        const holdings = [...DEMO_HOLDINGS, ...nonSampleHoldings];
+        return { holdings, cards: derive(holdings), isDemo: true };
       }),
       setAuraLanguage: (auraLanguage) => set({ auraLanguage }),
       setAuraSimple: (auraSimple) => set({ auraSimple }),

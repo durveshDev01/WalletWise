@@ -4,9 +4,9 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { catalog } from '../data/catalog';
-import { daysUntilDue, todayIso, walletAlerts } from '../engine';
+import { daysUntilDue, formatDueDate, ordinalDay, todayIso, upcomingDueDates, walletAlerts } from '../engine';
 import { useCardStore } from '../store/useCardStore';
-import { colors, typography } from '../theme';
+import { theme } from '../theme';
 
 export default function NotificationsScreen() {
   const router = useRouter();
@@ -28,12 +28,14 @@ export default function NotificationsScreen() {
       .filter((h) => h.dueDay != null && h.dueDay >= 1 && h.dueDay <= 31)
       .map((h) => {
         const days = daysUntilDue(h.dueDay!, now) ?? 0;
+        const [nextDue] = upcomingDueDates(h.dueDay!, now, 1);
         const cardData = cards.find((c) => c.id === h.id);
         const catalogCard = catalog.byId.get(h.catalogId);
         return {
           holdingId: h.id,
           name: cardData ? `${cardData.bankName} ${cardData.cardName}` : (catalogCard?.name ?? h.catalogId),
           dueDay: h.dueDay!,
+          dueDateFormatted: nextDue ? formatDueDate(nextDue, now) : `${ordinalDay(h.dueDay!)} of month`,
           daysLeft: days,
         };
       })
@@ -42,7 +44,7 @@ export default function NotificationsScreen() {
 
   // 3. Expiring points
   const expiringCards = useMemo(() => {
-    return cards.filter((c) => c.expiryDays != null && c.expiryDays <= 60);
+    return cards.filter((c) => c.expiryDays != null && c.expiryDays <= 60 && c.points > 0);
   }, [cards]);
 
   const totalAlertsCount = devaluations.length + billDues.filter((b) => b.daysLeft <= 7).length + expiringCards.length;
@@ -56,7 +58,7 @@ export default function NotificationsScreen() {
         paddingHorizontal: 20,
       }}
     >
-      <Pressable onPress={() => router.back()} style={styles.back}>
+      <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Go back" style={styles.back}>
         <Text style={styles.backText}>← Back</Text>
       </Pressable>
 
@@ -138,10 +140,10 @@ export default function NotificationsScreen() {
           >
             <View style={{ flex: 1 }}>
               <Text style={styles.billCardName}>{b.name}</Text>
-              <Text style={styles.billCardSub}>Due day {b.dueDay} of the month</Text>
+              <Text style={styles.billCardSub}>Due on {b.dueDateFormatted} · {ordinalDay(b.dueDay)} of month</Text>
             </View>
             <View style={styles.billDueBadge}>
-              <Text style={[styles.billDueDays, b.daysLeft <= 3 && { color: colors.accent.danger }]}>
+              <Text style={[styles.billDueDays, b.daysLeft <= 3 && { color: theme.colors.danger }]}>
                 {b.daysLeft === 0 ? 'Due today' : b.daysLeft === 1 ? 'Due tomorrow' : `${b.daysLeft} days left`}
               </Text>
             </View>
@@ -153,19 +155,28 @@ export default function NotificationsScreen() {
       {expiringCards.length > 0 && (
         <>
           <Text style={styles.sectionHeader}>POINTS EXPIRY ALERTS</Text>
-          {expiringCards.map((c) => (
-            <Pressable
-              key={c.id}
-              style={[styles.alertCard, { borderColor: 'rgba(201,65,46,0.3)' }]}
-              onPress={() => router.push({ pathname: '/card-detail', params: { id: c.id, tab: 'Redeem' } })}
-            >
-              <Text style={styles.alertCardName}>{c.bankName} {c.cardName}</Text>
-              <Text style={[styles.alertSummary, { color: colors.accent.danger, marginTop: 4 }]}>
-                {c.points.toLocaleString('en-IN')} {c.currencyName} expiring in {c.expiryDays} days!
-              </Text>
-              <Text style={styles.alertDate}>Tap to redeem before expiration →</Text>
-            </Pressable>
-          ))}
+          {expiringCards.map((c) => {
+            const isToday = c.expiryDays === 0;
+            const isTomorrow = c.expiryDays === 1;
+            const expiryText = isToday
+              ? 'expiring today!'
+              : isTomorrow
+                ? 'expiring tomorrow!'
+                : `expiring in ${c.expiryDays} days!`;
+            return (
+              <Pressable
+                key={c.id}
+                style={[styles.alertCard, { borderColor: 'rgba(201,65,46,0.3)' }]}
+                onPress={() => router.push({ pathname: '/card-detail', params: { id: c.id, tab: 'Redeem' } })}
+              >
+                <Text style={styles.alertCardName}>{c.bankName} {c.cardName}</Text>
+                <Text style={[styles.alertSummary, { color: theme.colors.danger, marginTop: 4 }]}>
+                  {c.points.toLocaleString('en-IN')} {c.currencyName} {expiryText}
+                </Text>
+                <Text style={styles.alertDate}>Tap to redeem before expiration →</Text>
+              </Pressable>
+            );
+          })}
         </>
       )}
 
@@ -179,21 +190,21 @@ export default function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: theme.colors.background },
   back: { paddingVertical: 8 },
-  backText: { fontFamily: typography.fontFamily, color: colors.accent.goldStart, fontSize: 15, fontWeight: '600' },
+  backText: { fontFamily: theme.fontFamily, color: theme.colors.gold, fontSize: 15, fontWeight: '600' },
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginTop: 8 },
-  title: { fontFamily: typography.fontFamily, color: '#F5F5F5', fontSize: 28, fontWeight: '700', letterSpacing: -0.5 },
-  sub: { fontFamily: typography.fontFamily, color: '#9A9A9A', fontSize: 13, marginTop: 6, lineHeight: 18 },
+  title: { fontFamily: theme.fontFamily, color: '#F5F5F5', fontSize: 28, fontWeight: '700', letterSpacing: -0.5 },
+  sub: { fontFamily: theme.fontFamily, color: '#9A9A9A', fontSize: 13, marginTop: 6, lineHeight: 18 },
   countBadge: {
     backgroundColor: 'rgba(245,208,111,0.15)',
-    borderColor: colors.accent.goldStart,
+    borderColor: theme.colors.gold,
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
   },
-  countBadgeText: { fontFamily: typography.fontFamily, color: colors.accent.goldStart, fontSize: 12, fontWeight: '700' },
+  countBadgeText: { fontFamily: theme.fontFamily, color: theme.colors.gold, fontSize: 12, fontWeight: '700' },
   controlsCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -205,8 +216,8 @@ const styles = StyleSheet.create({
     marginTop: 18,
     gap: 12,
   },
-  controlsTitle: { fontFamily: typography.fontFamily, color: '#F0F0F0', fontSize: 14, fontWeight: '600' },
-  controlsSub: { fontFamily: typography.fontFamily, color: '#888', fontSize: 12, marginTop: 2, lineHeight: 16 },
+  controlsTitle: { fontFamily: theme.fontFamily, color: '#F0F0F0', fontSize: 14, fontWeight: '600' },
+  controlsSub: { fontFamily: theme.fontFamily, color: '#888', fontSize: 12, marginTop: 2, lineHeight: 16 },
   toggleBtn: {
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -221,11 +232,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#202020',
     borderColor: '#333',
   },
-  toggleBtnText: { fontFamily: typography.fontFamily, fontSize: 12, fontWeight: '700' },
+  toggleBtnText: { fontFamily: theme.fontFamily, fontSize: 12, fontWeight: '700' },
   toggleBtnTextOn: { color: '#54C78A' },
   toggleBtnTextOff: { color: '#AAA' },
   sectionHeader: {
-    fontFamily: typography.fontFamily,
+    fontFamily: theme.fontFamily,
     color: '#6F6F6F',
     fontSize: 11,
     fontWeight: '700',
@@ -240,7 +251,7 @@ const styles = StyleSheet.create({
     borderColor: '#1E1E1E',
     padding: 14,
   },
-  emptyCardText: { fontFamily: typography.fontFamily, color: '#777', fontSize: 13 },
+  emptyCardText: { fontFamily: theme.fontFamily, color: '#777', fontSize: 13 },
   alertCard: {
     backgroundColor: '#141414',
     borderRadius: 14,
@@ -250,7 +261,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   alertHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  alertCardName: { fontFamily: typography.fontFamily, color: '#F5F5F5', fontSize: 14, fontWeight: '600' },
+  alertCardName: { fontFamily: theme.fontFamily, color: '#F5F5F5', fontSize: 14, fontWeight: '600' },
   devalBadge: {
     backgroundColor: 'rgba(201,65,46,0.15)',
     borderColor: 'rgba(201,65,46,0.5)',
@@ -259,9 +270,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
-  devalBadgeText: { fontFamily: typography.fontFamily, color: colors.accent.danger, fontSize: 9, fontWeight: '700' },
-  alertSummary: { fontFamily: typography.fontFamily, color: '#CCC', fontSize: 13, marginTop: 6, lineHeight: 18 },
-  alertDate: { fontFamily: typography.fontFamily, color: '#888', fontSize: 11, marginTop: 6 },
+  devalBadgeText: { fontFamily: theme.fontFamily, color: theme.colors.danger, fontSize: 9, fontWeight: '700' },
+  alertSummary: { fontFamily: theme.fontFamily, color: '#CCC', fontSize: 13, marginTop: 6, lineHeight: 18 },
+  alertDate: { fontFamily: theme.fontFamily, color: '#888', fontSize: 11, marginTop: 6 },
   billCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -272,10 +283,10 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 8,
   },
-  billCardName: { fontFamily: typography.fontFamily, color: '#F0F0F0', fontSize: 14, fontWeight: '600' },
-  billCardSub: { fontFamily: typography.fontFamily, color: '#888', fontSize: 12, marginTop: 2 },
+  billCardName: { fontFamily: theme.fontFamily, color: '#F0F0F0', fontSize: 14, fontWeight: '600' },
+  billCardSub: { fontFamily: theme.fontFamily, color: '#888', fontSize: 12, marginTop: 2 },
   billDueBadge: { alignItems: 'flex-end' },
-  billDueDays: { fontFamily: typography.fontFamily, color: colors.accent.goldStart, fontSize: 13, fontWeight: '700' },
+  billDueDays: { fontFamily: theme.fontFamily, color: theme.colors.gold, fontSize: 13, fontWeight: '700' },
   privacyNote: { marginTop: 20, padding: 12, borderRadius: 10, backgroundColor: '#101010', borderWidth: 1, borderColor: '#1C1C1C' },
-  privacyNoteText: { fontFamily: typography.fontFamily, color: '#666', fontSize: 11, lineHeight: 16, textAlign: 'center' },
+  privacyNoteText: { fontFamily: theme.fontFamily, color: '#666', fontSize: 11, lineHeight: 16, textAlign: 'center' },
 });

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Alert, Linking, StyleSheet, Switch, Text, View } from 'react-native';
 
-import { daysUntilDue, ordinalDay } from '../engine/billing';
+import { daysUntilDue, formatDueDate, ordinalDay, upcomingDueDates } from '../engine/billing';
 import { requestReminderPermission } from '../services/billReminders';
 import { useCardStore } from '../store/useCardStore';
 import type { Holding } from '../store/useCardStore';
@@ -14,7 +14,9 @@ export function BillDayPanel({ holding, onEdit }: Props) {
   const on = useCardStore((s) => !!s.billRemindersOn);
   const setOn = useCardStore((s) => s.setBillRemindersOn);
   const [busy, setBusy] = useState(false);
-  const left = holding.dueDay ? daysUntilDue(holding.dueDay, new Date()) : null;
+  const now = new Date();
+  const left = holding.dueDay ? daysUntilDue(holding.dueDay, now) : null;
+  const [nextDue] = holding.dueDay ? upcomingDueDates(holding.dueDay, now, 1) : [];
 
   const toggle = async (next: boolean) => {
     if (!next) {
@@ -42,7 +44,7 @@ export function BillDayPanel({ holding, onEdit }: Props) {
       {holding.dueDay ? (
         <>
           <Text style={styles.big}>
-            Due on the {ordinalDay(holding.dueDay)}
+            Due {nextDue ? formatDueDate(nextDue, now) : `on the ${ordinalDay(holding.dueDay)}`}
             {left != null ? (left === 0 ? ' · today' : ` · in ${left} day${left === 1 ? '' : 's'}`) : ''}
           </Text>
           {!!holding.statementDay && <Text style={styles.text}>Statement on the {ordinalDay(holding.statementDay)} of each month.</Text>}

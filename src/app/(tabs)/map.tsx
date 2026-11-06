@@ -165,6 +165,13 @@ export default function MapScreen() {
   const [rankMode, setRankMode] = useState<RankMode>('Max Value');
   const [openPlace, setOpenPlace] = useState<EnrichedPlace | null>(null);
   const [mapCenter, setMapCenter] = useState<{ lat: number; lon: number } | null>(null);
+  const [readyToCheckKey, setReadyToCheckKey] = useState(false);
+
+  useEffect(() => {
+    // Avoid flashing "Map key missing" warning during initial mount before token/location settles
+    const timer = setTimeout(() => setReadyToCheckKey(true), 600);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Lite mode opens a list of places; the map is one tap away (Map button in the sheet).
   const [showMap, setShowMap] = useState(MAP_AVAILABLE && !liteMode);
@@ -303,7 +310,7 @@ export default function MapScreen() {
 
   // ── Status shown above the list ────────────────────
   let status: { title: string; body: string; action?: { label: string; onPress: () => void } } | null = null;
-  if (!hasMapboxKey) {
+  if (!hasMapboxKey && readyToCheckKey) {
     status = {
       title: 'Map key missing',
       body: 'Add EXPO_PUBLIC_MAPBOX_TOKEN to the .env file in the project folder, then restart with "npx expo start -c".',
