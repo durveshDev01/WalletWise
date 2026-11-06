@@ -7,7 +7,7 @@ import { CardFace } from './CardFace';
 import { CARD_IMAGES } from './cardImages';
 
 type Props = {
-  card: { id: string; catalogId?: string; cardName?: string; bankName?: string };
+  card: { id: string; catalogId?: string; cardName?: string; bankName?: string; lastFour?: string };
   style?: any;
 };
 
@@ -39,7 +39,7 @@ export function CreditCardImage({ card, style }: Props) {
           priority="high"
         />
       ) : (
-        <CardFace issuer={issuer} name={name} network={data?.network} tier={data?.tier} />
+        <CardFace issuer={issuer} name={name} network={data?.network} tier={data?.tier} lastFour={card.lastFour} />
       )}
     </View>
   );

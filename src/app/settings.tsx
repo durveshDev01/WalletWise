@@ -33,6 +33,8 @@ export default function SettingsScreen() {
   const [email, setEmail] = useState('');
   const [syncMessage, setSyncMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [cooldownSec, setCooldownSec] = useState(0);
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [signedInEmail, setSignedInEmail] = useState<string | null>(null);
   const [backupStatus, setBackupStatus] = useState<{ exists: boolean; updatedAt: string | null; unlocked: boolean } | null>(null);
   const [backupStatusMessage, setBackupStatusMessage] = useState('');
@@ -102,19 +104,43 @@ export default function SettingsScreen() {
       setSignedInEmail(data.user?.email ?? data.session?.user.email ?? null);
       setSyncMessage('Signed in. Your wallet remains on this device until you create an encrypted backup.');
       await refreshBackupStatus();
-      router.replace('/settings');
+      // Do NOT call router.replace here — it unmounts this screen and re-mounts it,
+      // which re-triggers the deep-link useEffect and causes a navigation loop.
     }).catch((error: unknown) => {
       setSyncMessage(error instanceof Error ? error.message : 'Could not complete sign-in. Request a fresh email link.');
     });
   }, [linkingUrl, routeCode, router, refreshBackupStatus]);
 
+  // Clear the countdown interval when the component unmounts.
+  useEffect(() => () => { if (cooldownRef.current) clearInterval(cooldownRef.current); }, []);
+
+  const startCooldown = (seconds = 60) => {
+    setCooldownSec(seconds);
+    if (cooldownRef.current) clearInterval(cooldownRef.current);
+    cooldownRef.current = setInterval(() => {
+      setCooldownSec((prev) => {
+        if (prev <= 1) {
+          if (cooldownRef.current) { clearInterval(cooldownRef.current); cooldownRef.current = null; }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
   const sendSignInLink = async () => {
     if (!supabase) return setSyncMessage('Cloud backup is not configured in this build.');
+    if (cooldownSec > 0) return; // debounce — already waiting
     setBusy(true);
     try {
       const emailRedirectTo = Platform.OS === 'web' ? `${window.location.origin}/settings` : Linking.createURL('settings');
       const { error } = await supabase.auth.signInWithOtp({ email: email.trim(), options: { shouldCreateUser: true, emailRedirectTo } });
-      setSyncMessage(error ? error.message : 'Check your email and open the sign-in link on this device.');
+      if (error) {
+        setSyncMessage(error.message);
+      } else {
+        setSyncMessage('Check your email and tap the sign-in link on this device.');
+        startCooldown(60);
+      }
     } catch (error) {
       setSyncMessage(error instanceof Error ? error.message : 'Could not send a sign-in link.');
     } finally {
@@ -283,7 +309,11 @@ export default function SettingsScreen() {
           <Pressable onPress={signOut} style={styles.action}><Text style={styles.actionText}>Sign out</Text></Pressable>
         </> : <>
           <TextInput autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} placeholder="Email address" placeholderTextColor={theme.colors.textMuted} style={styles.input} />
-          <Pressable disabled={busy || !email.trim()} onPress={sendSignInLink} style={styles.action}><Text style={styles.actionText}>Email me a sign-in link</Text></Pressable>
+          <Pressable disabled={busy || !email.trim() || cooldownSec > 0} onPress={sendSignInLink} style={[styles.action, (cooldownSec > 0) && styles.actionDisabled]}>
+            <Text style={styles.actionText}>
+              {cooldownSec > 0 ? `Resend available in ${cooldownSec}s` : 'Email me a sign-in link'}
+            </Text>
+          </Pressable>
         </>}
         {!!syncMessage && <Text accessibilityRole="alert" style={theme.text.caption}>{syncMessage}</Text>}
       </View>
@@ -312,6 +342,7 @@ const styles = StyleSheet.create({
   pressed: { backgroundColor: theme.colors.pressed },
   input: { minHeight: theme.sizes.touch, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, color: theme.colors.textPrimary, paddingHorizontal: theme.spacing.md },
   action: { minHeight: theme.sizes.touch, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.goldBorder, justifyContent: 'center', alignItems: 'center', paddingHorizontal: theme.spacing.md },
+  actionDisabled: { borderColor: theme.colors.border, opacity: 0.5 },
   actionText: { color: theme.colors.gold, fontWeight: '700' },
   segment: { flexDirection: 'row', padding: theme.spacing.xs, borderRadius: theme.radius.md, backgroundColor: theme.colors.background },
   segmentItem: { flex: 1, minHeight: theme.sizes.touch, alignItems: 'center', justifyContent: 'center', borderRadius: theme.radius.sm },

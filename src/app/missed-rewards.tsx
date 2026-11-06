@@ -21,6 +21,8 @@ const CATEGORIES: { value: Category; label: string }[] = [
 
 type SpendDraft = { amount: string; category: Category; merchant: string; online: 'YES' | 'NO'; usedCardId: string };
 
+const NO_CC_ID = '__no_cc__';
+
 /**
  * Missed-rewards check: a few recent spends and the card used for each, then how much
  * more the best card in the wallet would have earned (same ranking as Best Card).
@@ -53,7 +55,7 @@ export default function MissedRewardsScreen() {
     if (eligibleLedgerSpends.length > 0) {
       return eligibleLedgerSpends;
     }
-    return [{ amount: '', category: 'GROCERY', merchant: '', online: 'NO', usedCardId: firstCard }];
+    return [{ amount: '', category: 'GROCERY', merchant: '', online: 'NO', usedCardId: NO_CC_ID }];
   });
   const [checked, setChecked] = useState(false);
   const update = (i: number, changes: Partial<SpendDraft>) => {
@@ -73,10 +75,13 @@ export default function MissedRewardsScreen() {
   const result = missedRewards(
     catalog,
     walletCards,
-    valid.map((s) => ({ amount: toNumber(s.amount), category: s.category, merchant: s.merchant, online: s.online === 'YES', usedCardId: s.usedCardId })),
+    valid.map((s) => ({ amount: toNumber(s.amount), category: s.category, merchant: s.merchant, online: s.online === 'YES', usedCardId: s.usedCardId === NO_CC_ID ? '' : s.usedCardId })),
     { experience },
   );
-  const cardOptions = walletCards.map((c) => ({ value: c.id, label: c.name }));
+  const cardOptions = [
+    { value: NO_CC_ID, label: '💸 UPI / Debit / Cash (no credit card)' },
+    ...walletCards.map((c) => ({ value: c.id, label: c.name })),
+  ];
 
   return (
     <MoneyScreen
@@ -162,7 +167,7 @@ export default function MissedRewardsScreen() {
       {(
         <LinkButton
           label="+ Add another spend"
-          onPress={() => setSpends((list) => [...list, { amount: '', category: 'DEFAULT', merchant: '', online: 'NO', usedCardId: firstCard }])}
+          onPress={() => setSpends((list) => [...list, { amount: '', category: 'DEFAULT', merchant: '', online: 'NO', usedCardId: NO_CC_ID }])}
         />
       )}
 
@@ -184,7 +189,7 @@ export default function MissedRewardsScreen() {
               <Text style={styles.spendTitle}>
                 {inr(r.spend.amount)} · {CATEGORIES.find((c) => c.value === r.spend.category)?.label}
               </Text>
-              <StatRow label={`${r.usedCard?.name ?? 'Your card'} earned`} value={inr(r.earned)} />
+              <StatRow label={`${r.usedCard?.name ?? (r.spend.usedCardId === NO_CC_ID || !r.spend.usedCardId ? 'UPI / Debit / Cash' : 'Your card')} earned`} value={inr(r.earned)} />
               {walletCards.length === 1 ? <Body style={styles.small}>Benchmark: this card’s eligible reward under catalog rules. No other card is available to compare.</Body> : r.missed > 0 && r.bestCard ? (
                 <>
                   <StatRow label={`${r.bestCard.name} would have earned`} value={inr(r.bestEarned)} tone="good" />

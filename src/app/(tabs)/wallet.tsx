@@ -92,7 +92,6 @@ function PointsValueCard({ cards, totalMin, totalMax, explainText }: { cards: Ca
 
   const programmes = useMemo(() => {
     return cards
-      .filter((c) => c.points > 0 || c.lowValue > 0)
       .map((c) => {
         const catCard = catalog.byId.get(c.catalogId);
         const routes = catCard ? redemptionRoutes(catalog, catCard) : [];
@@ -100,26 +99,30 @@ function PointsValueCard({ cards, totalMin, totalMax, explainText }: { cards: Ca
         const hotelRoutes = routes.filter((r) => r.kind === 'TRANSFER' && r.partnerKind === 'HOTEL');
         const cashRoute = routes.find((r) => r.kind === 'CASH');
         const isCashback = c.currencyName.toLowerCase().includes('cashback') || (routes.length === 1 && routes[0].kind === 'CASH');
+        const noBalance = c.points === 0 && c.lowValue === 0;
 
         const avenues: string[] = [];
-        if (airlineRoutes.length > 0) {
-          const names = airlineRoutes.slice(0, 2).map((r) => r.label.replace(/^Transfer to /, ''));
-          avenues.push(`✈️ Flights (${airlineRoutes.length} airline${airlineRoutes.length > 1 ? 's' : ''}: ${names.join(', ')}${airlineRoutes.length > 2 ? '…' : ''})`);
-        }
-        if (hotelRoutes.length > 0) {
-          const names = hotelRoutes.slice(0, 2).map((r) => r.label.replace(/^Transfer to /, ''));
-          avenues.push(`🏨 Hotels (${hotelRoutes.length} partner${hotelRoutes.length > 1 ? 's' : ''}: ${names.join(', ')}${hotelRoutes.length > 2 ? '…' : ''})`);
-        }
-        if (cashRoute || isCashback) {
-          avenues.push(`💵 Statement credit / Cash`);
-        }
-        if (!isCashback) {
-          avenues.push(`🛍️ Brand vouchers & rewards portal`);
+        if (!noBalance) {
+          if (airlineRoutes.length > 0) {
+            const names = airlineRoutes.slice(0, 2).map((r) => r.label.replace(/^Transfer to /, ''));
+            avenues.push(`✈️ Flights (${airlineRoutes.length} airline${airlineRoutes.length > 1 ? 's' : ''}: ${names.join(', ')}${airlineRoutes.length > 2 ? '…' : ''})`);
+          }
+          if (hotelRoutes.length > 0) {
+            const names = hotelRoutes.slice(0, 2).map((r) => r.label.replace(/^Transfer to /, ''));
+            avenues.push(`🏨 Hotels (${hotelRoutes.length} partner${hotelRoutes.length > 1 ? 's' : ''}: ${names.join(', ')}${hotelRoutes.length > 2 ? '…' : ''})`);
+          }
+          if (cashRoute || isCashback) {
+            avenues.push(`💵 Statement credit / Cash`);
+          }
+          if (!isCashback) {
+            avenues.push(`🛍️ Brand vouchers & rewards portal`);
+          }
         }
 
         return {
           card: c,
           avenues,
+          noBalance,
           routesCount: routes.length,
         };
       });
@@ -138,7 +141,7 @@ function PointsValueCard({ cards, totalMin, totalMax, explainText }: { cards: Ca
       {/* Programme Breakdown */}
       {programmes.length > 0 && (
         <View style={styles.programmeList}>
-          {programmes.map(({ card: c, avenues }) => (
+          {programmes.map(({ card: c, avenues, noBalance }) => (
             <Pressable
               key={c.id}
               style={styles.programmeItem}
@@ -146,16 +149,24 @@ function PointsValueCard({ cards, totalMin, totalMax, explainText }: { cards: Ca
             >
               <View style={{ flex: 1 }}>
                 <Text style={styles.programmeCardName}>{c.bankName} {c.cardName}</Text>
-                <Text style={styles.programmeBalance}>
-                  {c.points.toLocaleString('en-IN')} {c.currencyName} ≈ ₹{c.lowValue.toLocaleString('en-IN')}{c.highValue > c.lowValue ? ` – ₹${c.highValue.toLocaleString('en-IN')}` : ''}
-                </Text>
-                <View style={{ marginTop: 4, gap: 2 }}>
-                  {avenues.map((av, idx) => (
-                    <Text key={idx} style={styles.programmeDetail}>
-                      {av}
+                {noBalance ? (
+                  <Text style={[styles.programmeDetail, { color: '#7A7A7A', fontStyle: 'italic' }]}>
+                    No balance recorded — tap to update points
+                  </Text>
+                ) : (
+                  <>
+                    <Text style={styles.programmeBalance}>
+                      {c.points.toLocaleString('en-IN')} {c.currencyName} ≈ ₹{c.lowValue.toLocaleString('en-IN')}{c.highValue > c.lowValue ? ` – ₹${c.highValue.toLocaleString('en-IN')}` : ''}
                     </Text>
-                  ))}
-                </View>
+                    <View style={{ marginTop: 4, gap: 2 }}>
+                      {avenues.map((av, idx) => (
+                        <Text key={idx} style={styles.programmeDetail}>
+                          {av}
+                        </Text>
+                      ))}
+                    </View>
+                  </>
+                )}
               </View>
               <Text style={styles.programmeArrow}>→</Text>
             </Pressable>

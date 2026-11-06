@@ -47,9 +47,12 @@ const css = (topPx: number) => `
   }
   .mapboxgl-ctrl-logo {
     margin: 0 !important;
-    opacity: 0.85 !important;
+    opacity: 0 !important;
     pointer-events: none !important;
     cursor: default !important;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
   }
   .mapboxgl-ctrl-attrib.mapboxgl-compact {
     background: rgba(18,20,24,0.85) !important;
