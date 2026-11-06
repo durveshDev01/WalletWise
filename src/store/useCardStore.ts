@@ -201,7 +201,14 @@ const DEMO_HOLDINGS: Holding[] = [
   { id: '5', catalogId: 'hdfc-marriott-bonvoy', bankName: 'HDFC BANK', cardName: 'Marriott Bonvoy', lastFour: '9012', points: 18000 },
 ];
 const DEMO_HOLDING_IDS = new Set(DEMO_HOLDINGS.map((holding) => holding.id));
-export const isSampleHolding = (holding: Pick<Holding, 'id'>) => DEMO_HOLDING_IDS.has(holding.id);
+const DEMO_CATALOG_IDS = new Set(DEMO_HOLDINGS.map((h) => h.catalogId));
+const DEMO_SAMPLE_LAST_FOURS = new Set(['4920', '8821', '1234', '5678', '9012']);
+
+export const isSampleHolding = (h: Pick<Holding, 'id'> & Partial<Pick<Holding, 'catalogId' | 'lastFour'>>) =>
+  DEMO_HOLDING_IDS.has(h.id) ||
+  h.id.length <= 2 ||
+  h.id.startsWith('demo-') ||
+  (h.catalogId != null && DEMO_CATALOG_IDS.has(h.catalogId) && h.lastFour != null && DEMO_SAMPLE_LAST_FOURS.has(h.lastFour));
 
 /** Random id for this install. Sent to the Aura server only for rate limiting. */
 const newUserId = () => `u-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -337,15 +344,18 @@ export const useCardStore = create<CardStore>()(
             ...snapshot,
             holdings,
             cards: derive(holdings),
-            isDemo: snapshot.isDemo ?? holdings.some((h) => DEMO_HOLDING_IDS.has(h.id)),
+            isDemo: snapshot.isDemo ?? holdings.some((h) => isSampleHolding(h)),
           };
         }),
       removeSampleCards: () => set((s) => {
-        const holdings = s.holdings.filter((h) => !DEMO_HOLDING_IDS.has(h.id));
+        let holdings = s.holdings.filter((h) => !isSampleHolding(h));
+        if (holdings.length === s.holdings.length && s.isDemo) {
+          holdings = [];
+        }
         return { holdings, cards: derive(holdings), isDemo: false };
       }),
       loadSampleCards: () => set((s) => {
-        const nonSampleHoldings = s.holdings.filter((h) => !DEMO_HOLDING_IDS.has(h.id));
+        const nonSampleHoldings = s.holdings.filter((h) => !isSampleHolding(h));
         const holdings = [...DEMO_HOLDINGS, ...nonSampleHoldings];
         return { holdings, cards: derive(holdings), isDemo: true };
       }),

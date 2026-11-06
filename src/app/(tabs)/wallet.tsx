@@ -18,7 +18,7 @@ import { ScrollView, GestureDetector, Gesture } from 'react-native-gesture-handl
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { typography, colors } from '../../theme';
-import { useCardStore, CardData } from '../../store/useCardStore';
+import { useCardStore, CardData, isSampleHolding } from '../../store/useCardStore';
 import { CreditCardImage } from '../../components/CreditCardImage';
 import { WalletMoneyLinks } from '../../components/money/WalletMoneyLinks';
 import { UI_STRINGS } from '../../services/appStrings';
@@ -493,7 +493,7 @@ export default function WalletScreen() {
                   </Text>
                 )}
               </Text>
-              {isDemo && cards.length > 0 && (
+              {(isDemo || cards.some(isSampleHolding)) && cards.length > 0 && (
                 <Pressable onPress={removeSampleCards} style={styles.demoChip} accessibilityLabel="Clear sample comparison cards">
                   <Text style={styles.demoChipText}>Sample Deck · Clear</Text>
                 </Pressable>

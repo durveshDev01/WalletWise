@@ -366,9 +366,18 @@ export default function CardDetailScreen() {
     setEditing(false);
   };
   const confirmRemove = () => {
+    const doRemove = () => {
+      removeHolding(card.id);
+      router.back();
+    };
+    if (Platform.OS === 'web') {
+      const ok = typeof window !== 'undefined' ? window.confirm(`Remove ${card.bankName} ${card.cardName} from your wallet?`) : true;
+      if (ok) doRemove();
+      return;
+    }
     Alert.alert('Remove card?', `${card.bankName} ${card.cardName} will be removed from your wallet.`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => { removeHolding(card.id); router.back(); } },
+      { text: 'Remove', style: 'destructive', onPress: doRemove },
     ]);
   };
 
@@ -512,6 +521,16 @@ export default function CardDetailScreen() {
             {activeTab === 'Benefits' && <BenefitsTab card={card} />}
             {activeTab === 'Updates' && <UpdatesTab card={card} />}
             <Text style={s.attribution}>{DATA_ATTRIBUTION}</Text>
+            {!preview && (
+              <Pressable
+                onPress={confirmRemove}
+                style={s.removeCardButton}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${card.bankName} ${card.cardName} from wallet`}
+              >
+                <Text style={s.removeCardButtonText}>Remove this card from wallet</Text>
+              </Pressable>
+            )}
           </View>
         </Animated.View>
       </ScrollView>
@@ -872,5 +891,22 @@ const s = StyleSheet.create({
     color: '#9A9A9A',
     fontSize: 13,
     lineHeight: 18,
+  },
+  removeCardButton: {
+    marginTop: 24,
+    marginBottom: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(201, 65, 46, 0.4)',
+    backgroundColor: 'rgba(201, 65, 46, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeCardButtonText: {
+    fontFamily: typography.fontFamily,
+    color: '#E06D53',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
