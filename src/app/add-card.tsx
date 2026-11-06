@@ -41,9 +41,15 @@ export default function AddCardScreen() {
 
   const save = () => {
     if (!picked) return;
-    if (points.trim() === '' || !/^\d+$/.test(points.trim())) { Alert.alert('Enter your balance', 'Enter the points or cashback balance from your issuer app. Enter 0 if you do not know it yet.'); return; }
+    if (points.trim() !== '' && !/^\d+$/.test(points.trim())) {
+      Alert.alert('Check balance', 'Please enter a valid whole number for your points or cashback balance (leave empty for 0).');
+      return;
+    }
     const invalidDay = [statementDay, dueDay].find((day) => day.trim() && !parseBillDay(day));
-    if (invalidDay) { Alert.alert('Check bill day', 'Statement and due days must be whole numbers from 1 to 31.'); return; }
+    if (invalidDay) {
+      Alert.alert('Check bill day', 'Statement and due days must be whole numbers from 1 to 31.');
+      return;
+    }
 
     const trimmedExpiry = expiryText.trim();
     let expiryDateVal: string | undefined;
