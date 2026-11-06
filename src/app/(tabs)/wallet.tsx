@@ -139,7 +139,16 @@ function PointsValueCard({ cards, totalMin, totalMax, explainText }: { cards: Ca
       </Text>
 
       {/* Programme Breakdown */}
-      {programmes.length > 0 && (
+      {programmes.length === 0 ? (
+        <View style={styles.emptyProgrammeSlot}>
+          <Text style={styles.emptyProgrammeText}>
+            No card balances recorded yet. Add your cards or tap &ldquo;Load sample deck&rdquo; above to see reward valuations.
+          </Text>
+          <Pressable onPress={() => router.push('/add-card')} style={{ marginTop: 8 }} accessibilityRole="button">
+            <Text style={styles.emptyProgrammeAction}>+ Add your first card →</Text>
+          </Pressable>
+        </View>
+      ) : (
         <View style={styles.programmeList}>
           {programmes.map(({ card: c, avenues, noBalance }) => (
             <Pressable
@@ -150,9 +159,20 @@ function PointsValueCard({ cards, totalMin, totalMax, explainText }: { cards: Ca
               <View style={{ flex: 1 }}>
                 <Text style={styles.programmeCardName}>{c.bankName} {c.cardName}</Text>
                 {noBalance ? (
-                  <Text style={[styles.programmeDetail, { color: '#7A7A7A', fontStyle: 'italic' }]}>
-                    No balance recorded — tap to update points
-                  </Text>
+                  <>
+                    <Text style={[styles.programmeDetail, { color: '#7A7A7A', fontStyle: 'italic' }]}>
+                      No balance recorded — tap to update points
+                    </Text>
+                    {c.pointsExpiry?.neverExpires ? (
+                      <Text style={[styles.programmeDetail, { color: '#54C78A', fontWeight: '600' }]}>
+                        ✨ Points never expire
+                      </Text>
+                    ) : c.pointsExpiry?.note ? (
+                      <Text style={[styles.programmeDetail, { color: '#888888', fontSize: 11 }]}>
+                        Policy: {c.pointsExpiry.note}
+                      </Text>
+                    ) : null}
+                  </>
                 ) : (
                   <>
                     <Text style={styles.programmeBalance}>
@@ -369,6 +389,7 @@ export default function WalletScreen() {
   const cards = useCardStore((state) => state.cards);
   const isDemo = useCardStore((state) => state.isDemo);
   const removeSampleCards = useCardStore((state) => state.removeSampleCards);
+  const loadSampleCards = useCardStore((state) => state.loadSampleCards);
   const language = useCardStore((state) => state.auraLanguage ?? 'en');
   const t = UI_STRINGS[language].wallet;
   const router = useRouter();
@@ -406,6 +427,7 @@ export default function WalletScreen() {
 
   // Pan gesture for expanding/collapsing
   const panGesture = Gesture.Pan()
+    .enabled(cards.length > 1)
     .activeOffsetY([-20, 20])
     .onStart(() => {
       context.value = dragProgress.value;
@@ -456,11 +478,27 @@ export default function WalletScreen() {
       >
         {/* Header (Top) */}
         <View style={styles.header}>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={styles.headerTitle}>{t.title}</Text>
-            <Text style={styles.headerSubLabel}>
-              {t.pointsWorth} <Text style={{ color: colors.accent.goldStart }}>₹{totalMin.toLocaleString('en-IN')} – ₹{totalMax.toLocaleString('en-IN')}</Text>
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+              <Text style={styles.headerSubLabel}>
+                {cards.length > 0
+                  ? totalMax > 0
+                    ? `${t.pointsWorth} `
+                    : 'No balances recorded'
+                  : '0 cards in deck'}
+                {cards.length > 0 && totalMax > 0 && (
+                  <Text style={{ color: colors.accent.goldStart }}>
+                    ₹{totalMin.toLocaleString('en-IN')}{totalMax > totalMin ? ` – ₹${totalMax.toLocaleString('en-IN')}` : ''}
+                  </Text>
+                )}
+              </Text>
+              {isDemo && cards.length > 0 && (
+                <Pressable onPress={removeSampleCards} style={styles.demoChip} accessibilityLabel="Clear sample comparison cards">
+                  <Text style={styles.demoChipText}>Sample Deck · Clear</Text>
+                </Pressable>
+              )}
+            </View>
           </View>
           <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
             <Pressable style={styles.plusButton} onPress={() => router.push('/settings')} accessibilityLabel="Settings">
@@ -472,75 +510,71 @@ export default function WalletScreen() {
           </View>
         </View>
 
-        {isDemo && cards.length > 0 && (
-          <View style={styles.demoBanner}>
-            <Text style={styles.demoTitle}>Sample cards are included</Text>
-            <Text style={styles.demoText}>They remain alongside cards you add, as a comparison set. Remove them any time below.</Text>
-            <Pressable onPress={() => router.push('/add-card')} accessibilityRole="button"><Text style={styles.demoTitle}>Add a card →</Text></Pressable>
-            <Pressable onPress={removeSampleCards} accessibilityRole="button" accessibilityLabel="Remove sample cards"><Text style={styles.demoText}>Remove sample cards</Text></Pressable>
-          </View>
-        )}
-
+        {/* Card Deck Area (Card Deck or Empty Deck Slot) */}
         {cards.length === 0 ? (
-          <View style={styles.emptyWalletCard}>
-            <View style={styles.emptyWalletIconCircle}>
-              <Text style={{ fontSize: 36 }}>💳</Text>
+          <View style={styles.emptyDeckSlot}>
+            <View style={styles.emptyDeckIconCircle}>
+              <Text style={{ fontSize: 28 }}>💳</Text>
             </View>
-            <Text style={styles.emptyWalletTitle}>{t.emptyTitle}</Text>
-            <Text style={styles.emptyWalletSubtitle}>
-              {t.emptySubtitle}
-            </Text>
-            <Pressable
-              style={styles.addFirstCardButton}
-              onPress={() => router.push('/add-card')}
-              accessibilityRole="button"
-              accessibilityLabel="Add your first card"
-            >
-              <Text style={styles.addFirstCardButtonText}>{t.addFirstCard}</Text>
-            </Pressable>
-            <Pressable
-              style={styles.findCardLink}
-              onPress={() => router.push('/find-card')}
-              accessibilityRole="button"
-            >
-              <Text style={styles.findCardLinkText}>{t.findCardLink}</Text>
-            </Pressable>
+            <Text style={styles.emptyDeckTitle}>{t.emptyTitle}</Text>
+            <Text style={styles.emptyDeckSubtitle}>{t.emptySubtitle}</Text>
+            <View style={styles.emptyDeckActions}>
+              <Pressable
+                style={styles.addFirstCardButton}
+                onPress={() => router.push('/add-card')}
+                accessibilityRole="button"
+                accessibilityLabel="Add your first card"
+              >
+                <Text style={styles.addFirstCardButtonText}>{t.addFirstCard}</Text>
+              </Pressable>
+              <Pressable
+                style={styles.loadDemoButton}
+                onPress={loadSampleCards}
+                accessibilityRole="button"
+                accessibilityLabel="Explore with sample cards"
+              >
+                <Text style={styles.loadDemoButtonText}>Load sample deck</Text>
+              </Pressable>
+            </View>
           </View>
         ) : (
-          <>
-            {/* Card Deck (Immediately below header) */}
-            <GestureDetector gesture={panGesture}>
-              <Animated.View style={[styles.deckContainer, deckAnimatedStyle]}>
-                {cards.map((card, i) => (
-                  <StackedCard
-                    key={card.id}
-                    card={card}
-                    index={i}
-                    dragProgress={dragProgress}
-                    totalCards={cards.length}
-                    selectedIndex={selectedIndex}
-                    onPress={() => handleCardPress(i)}
-                  />
-                ))}
-              </Animated.View>
-            </GestureDetector>
-
-            {/* Interaction Hint (Below deck) */}
-            <Animated.View style={[styles.hintPill, hintAnimatedStyle]}>
-              <View style={styles.hintIconWrapper}>
-                <Text style={styles.hintIcon}>💳</Text>
-              </View>
-              <Text style={styles.hintText}>
-                {t.swipeHint}
-              </Text>
+          <GestureDetector gesture={panGesture}>
+            <Animated.View style={[styles.deckContainer, deckAnimatedStyle]}>
+              {cards.map((card, i) => (
+                <StackedCard
+                  key={card.id}
+                  card={card}
+                  index={i}
+                  dragProgress={dragProgress}
+                  totalCards={cards.length}
+                  selectedIndex={selectedIndex}
+                  onPress={() => handleCardPress(i)}
+                />
+              ))}
             </Animated.View>
-
-            {/* Rest of the Info (Below hint) */}
-            <ExpiryBanner cards={cards} />
-            <Text style={styles.sectionTitle}>{t.rewardBalances}</Text>
-            <PointsValueCard cards={cards} totalMin={totalMin} totalMax={totalMax} explainText={t.valueExplain} />
-          </>
+          </GestureDetector>
         )}
+
+        {/* Interaction Hint (Always beneath deck area) */}
+        <Animated.View style={[styles.hintPill, hintAnimatedStyle]}>
+          <View style={styles.hintIconWrapper}>
+            <Text style={styles.hintIcon}>💳</Text>
+          </View>
+          <Text style={styles.hintText}>
+            {cards.length > 1
+              ? t.swipeHint
+              : cards.length === 1
+              ? 'Tap the card above to view details, update points, or check redemption routes.'
+              : 'Add your credit cards or explore with sample cards to track points and optimize rewards.'}
+          </Text>
+        </Animated.View>
+
+        {/* Expiry Banner */}
+        <ExpiryBanner cards={cards} />
+
+        {/* Reward Balances (Always present) */}
+        <Text style={styles.sectionTitle}>{t.rewardBalances}</Text>
+        <PointsValueCard cards={cards} totalMin={totalMin} totalMax={totalMax} explainText={t.valueExplain} />
 
         <WalletMoneyLinks />
 
@@ -553,86 +587,124 @@ export default function WalletScreen() {
 // Styles
 // ─────────────────────────────────────────────
 const styles = StyleSheet.create({
-  demoBanner: {
-    borderWidth: 1,
-    borderColor: 'rgba(245,208,111,0.35)',
-    backgroundColor: 'rgba(245,208,111,0.06)',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 16,
-  },
-  demoTitle: { fontFamily: typography.fontFamily, color: colors.accent.goldStart, fontSize: 14, fontWeight: '700' },
-  demoText: { fontFamily: typography.fontFamily, color: '#B0B0B0', fontSize: 13, marginTop: 4, lineHeight: 18 },
-  container: {
-    flex: 1,
-    backgroundColor: '#070707', // Reverted to black
-  },
-  scrollContent: {
-    paddingHorizontal: 24,
-  },
-
-  // Empty Wallet
-  emptyWalletCard: {
-    backgroundColor: '#121212',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: '#242424',
-    padding: 28,
-    alignItems: 'center',
-    marginTop: 12,
-    marginBottom: 24,
-  },
-  emptyWalletIconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: 'rgba(245, 208, 111, 0.1)',
+  demoChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: 'rgba(245, 208, 111, 0.12)',
     borderWidth: 1,
     borderColor: 'rgba(245, 208, 111, 0.3)',
+  },
+  demoChipText: {
+    fontFamily: typography.fontFamily,
+    color: colors.accent.goldStart,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  emptyDeckSlot: {
+    width: '100%',
+    minHeight: CARD_HEIGHT,
+    backgroundColor: '#111111',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(245, 208, 111, 0.25)',
+    padding: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 18,
   },
-  emptyWalletTitle: {
+  emptyDeckIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(245, 208, 111, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 208, 111, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  emptyDeckTitle: {
     fontFamily: typography.fontFamily,
     color: '#F5F5F5',
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '700',
-    marginBottom: 8,
+    marginBottom: 4,
     textAlign: 'center',
   },
-  emptyWalletSubtitle: {
+  emptyDeckSubtitle: {
     fontFamily: typography.fontFamily,
-    color: '#9A9A9A',
-    fontSize: 13,
-    lineHeight: 19,
+    color: '#8E8E8E',
+    fontSize: 12,
+    lineHeight: 17,
     textAlign: 'center',
-    marginBottom: 24,
+    maxWidth: 320,
+    marginBottom: 16,
+  },
+  emptyDeckActions: {
+    flexDirection: 'row',
+    gap: 10,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
   },
   addFirstCardButton: {
     backgroundColor: colors.accent.goldStart,
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    width: '100%',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
   addFirstCardButtonText: {
     fontFamily: typography.fontFamily,
     color: '#0A0A0A',
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '700',
   },
-  findCardLink: {
-    marginTop: 16,
-    paddingVertical: 6,
+  loadDemoButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  findCardLinkText: {
+  loadDemoButtonText: {
     fontFamily: typography.fontFamily,
-    color: colors.accent.goldStart,
+    color: '#E0E0E0',
     fontSize: 13,
     fontWeight: '600',
+  },
+  emptyProgrammeSlot: {
+    backgroundColor: '#161616',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#242424',
+    padding: 14,
+    marginTop: 14,
+    alignItems: 'center',
+  },
+  emptyProgrammeText: {
+    fontFamily: typography.fontFamily,
+    color: '#8A8A8A',
+    fontSize: 12,
+    lineHeight: 17,
+    textAlign: 'center',
+  },
+  emptyProgrammeAction: {
+    fontFamily: typography.fontFamily,
+    color: colors.accent.goldStart,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  container: {
+    flex: 1,
+    backgroundColor: '#070707', // Reverted to black
+  },
+  scrollContent: {
+    paddingHorizontal: 24,
   },
 
   // Header

@@ -138,8 +138,8 @@ export default function SettingsScreen() {
       if (error) {
         const isRate = error.message.toLowerCase().includes('rate') || (error as any).status === 429;
         if (isRate) {
-          setSyncMessage('Supabase security rate limit reached. Please wait 60 seconds before requesting another sign-in link.');
-          startCooldown(60);
+          setSyncMessage('Supabase email rate limit exceeded (free tier allows 3 emails/hour). Check your inbox for any previous magic link or wait before retrying.');
+          startCooldown(120);
         } else {
           setSyncMessage(error.message);
         }

@@ -257,6 +257,8 @@ interface CardStore {
   importCards: (cards: { catalogId: string; lastFour: string; points: number }[]) => void;
   /** Restores a full wallet state from an encrypted cloud backup and recalculates cards. */
   restoreSnapshot: (saved: Record<string, unknown>) => void;
+  /** Restores the 5 comparison sample cards for testing and comparison. */
+  loadSampleCards: () => void;
 }
 
 const derive = (holdings: Holding[]) => holdings.flatMap((h) => (catalog.byId.has(h.catalogId) ? [toCardData(h)] : []));
@@ -322,7 +324,8 @@ export const useCardStore = create<CardStore>()(
       removeHolding: (id) =>
         set((s) => {
           const holdings = s.holdings.filter((h) => h.id !== id);
-          return { holdings, cards: derive(holdings) };
+          const hasSample = holdings.some((h) => DEMO_HOLDING_IDS.has(h.id));
+          return { holdings, cards: derive(holdings), isDemo: hasSample && s.isDemo };
         }),
       clearDemo: () => set({ holdings: [], cards: [], isDemo: false }),
       restoreSnapshot: (saved) =>
@@ -334,13 +337,17 @@ export const useCardStore = create<CardStore>()(
             ...snapshot,
             holdings,
             cards: derive(holdings),
-            isDemo: snapshot.isDemo ?? false,
+            isDemo: snapshot.isDemo ?? holdings.some((h) => DEMO_HOLDING_IDS.has(h.id)),
           };
         }),
       removeSampleCards: () => set((s) => {
-        const sampleIds = new Set(DEMO_HOLDINGS.map((h) => h.id));
-        const holdings = s.holdings.filter((h) => !sampleIds.has(h.id));
+        const holdings = s.holdings.filter((h) => !DEMO_HOLDING_IDS.has(h.id));
         return { holdings, cards: derive(holdings), isDemo: false };
+      }),
+      loadSampleCards: () => set((s) => {
+        const nonSampleHoldings = s.holdings.filter((h) => !DEMO_HOLDING_IDS.has(h.id));
+        const holdings = [...DEMO_HOLDINGS, ...nonSampleHoldings];
+        return { holdings, cards: derive(holdings), isDemo: true };
       }),
       setAuraLanguage: (auraLanguage) => set({ auraLanguage }),
       setAuraSimple: (auraSimple) => set({ auraSimple }),
