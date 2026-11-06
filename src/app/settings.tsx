@@ -38,6 +38,7 @@ export default function SettingsScreen() {
   const [backupStatusMessage, setBackupStatusMessage] = useState('');
   const [backupPassphrase, setBackupPassphrase] = useState('');
   const [confirmPassphrase, setConfirmPassphrase] = useState('');
+  const [showPassphrase, setShowPassphrase] = useState(false);
   const linkingUrl = Linking.useLinkingURL();
   const { code: routeCode } = useLocalSearchParams<{ code?: string }>();
   const processedCallback = useRef<string | null>(null);
@@ -272,8 +273,11 @@ export default function SettingsScreen() {
             ? `Encrypted cloud backup found${backupStatus.updatedAt ? ` · updated ${new Date(backupStatus.updatedAt).toLocaleString()}` : ''}${backupStatus.unlocked ? ' · unlocked on this device' : ' · enter its passphrase to restore or update'}`
             : backupStatus ? 'No cloud backup exists yet. Your current wallet is still only on this device.' : 'Checking cloud backup status…')}</Text>
           {!!backupStatusMessage && <Pressable disabled={busy} onPress={() => void refreshBackupStatus()} style={styles.action}><Text style={styles.actionText}>Check again</Text></Pressable>}
-          <TextInput secureTextEntry value={backupPassphrase} onChangeText={setBackupPassphrase} placeholder={backupStatus?.exists ? 'Backup passphrase' : 'Create backup passphrase (12+ characters)'} placeholderTextColor={theme.colors.textMuted} style={styles.input} autoCapitalize="none" />
-          {!backupStatus?.exists && <TextInput secureTextEntry value={confirmPassphrase} onChangeText={setConfirmPassphrase} placeholder="Confirm backup passphrase" placeholderTextColor={theme.colors.textMuted} style={styles.input} autoCapitalize="none" />}
+          <TextInput secureTextEntry={!showPassphrase} value={backupPassphrase} onChangeText={setBackupPassphrase} placeholder={backupStatus?.exists ? 'Backup passphrase' : 'Create backup passphrase (12+ characters)'} placeholderTextColor={theme.colors.textMuted} style={styles.input} autoCapitalize="none" />
+          {!backupStatus?.exists && <TextInput secureTextEntry={!showPassphrase} value={confirmPassphrase} onChangeText={setConfirmPassphrase} placeholder="Confirm backup passphrase" placeholderTextColor={theme.colors.textMuted} style={styles.input} autoCapitalize="none" />}
+          <Pressable onPress={() => setShowPassphrase((v) => !v)} accessibilityRole="button" style={{ alignSelf: 'flex-end', paddingVertical: 4 }}>
+            <Text style={[theme.text.caption, { color: theme.colors.gold }]}>{showPassphrase ? 'Hide passphrase' : 'Show passphrase'}</Text>
+          </Pressable>
           <Pressable disabled={busy || !backupStatus || (!backupPassphrase && !backupStatus.unlocked)} onPress={backup} style={styles.action}><Text style={styles.actionText}>{backupStatus?.exists ? 'Encrypt and update cloud backup' : 'Encrypt and back up this device'}</Text></Pressable>
           {backupStatus?.exists && <Pressable disabled={busy || !backupPassphrase} onPress={restore} style={styles.action}><Text style={styles.actionText}>Decrypt and restore cloud backup</Text></Pressable>}
           <Pressable onPress={signOut} style={styles.action}><Text style={styles.actionText}>Sign out</Text></Pressable>

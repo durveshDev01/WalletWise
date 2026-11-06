@@ -21,6 +21,7 @@ import { typography, colors } from '../../theme';
 import { useCardStore, CardData } from '../../store/useCardStore';
 import { CreditCardImage } from '../../components/CreditCardImage';
 import { WalletMoneyLinks } from '../../components/money/WalletMoneyLinks';
+import { UI_STRINGS } from '../../services/appStrings';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -86,7 +87,7 @@ function ExpiryBanner({ cards }: { cards: CardData[] }) {
 // ─────────────────────────────────────────────
 // Points Value Card (Black + Gold Theme) — Programme-specific redemptions
 // ─────────────────────────────────────────────
-function PointsValueCard({ cards, totalMin, totalMax }: { cards: CardData[]; totalMin: number; totalMax: number }) {
+function PointsValueCard({ cards, totalMin, totalMax, explainText }: { cards: CardData[]; totalMin: number; totalMax: number; explainText?: string }) {
   const router = useRouter();
 
   const programmes = useMemo(() => {
@@ -131,7 +132,7 @@ function PointsValueCard({ cards, totalMin, totalMax }: { cards: CardData[]; tot
         ₹{totalMin.toLocaleString('en-IN')}{totalMax > totalMin ? ` – ₹${totalMax.toLocaleString('en-IN')}` : ''}
       </Text>
       <Text style={styles.infoSubtext}>
-        Estimated INR equivalent per card account. Reward points are card-specific and cannot be pooled or transferred across cards.
+        {explainText ?? 'Estimated INR equivalent per card account. Reward points are card-specific and cannot be pooled or transferred across cards.'}
       </Text>
 
       {/* Programme Breakdown */}
@@ -334,6 +335,8 @@ export default function WalletScreen() {
   const cards = useCardStore((state) => state.cards);
   const isDemo = useCardStore((state) => state.isDemo);
   const removeSampleCards = useCardStore((state) => state.removeSampleCards);
+  const language = useCardStore((state) => state.auraLanguage ?? 'en');
+  const t = UI_STRINGS[language].wallet;
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -420,9 +423,9 @@ export default function WalletScreen() {
         {/* Header (Top) */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.headerTitle}>My Cards</Text>
+            <Text style={styles.headerTitle}>{t.title}</Text>
             <Text style={styles.headerSubLabel}>
-              Points worth: <Text style={{ color: colors.accent.goldStart }}>₹{totalMin.toLocaleString('en-IN')} – ₹{totalMax.toLocaleString('en-IN')}</Text>
+              {t.pointsWorth} <Text style={{ color: colors.accent.goldStart }}>₹{totalMin.toLocaleString('en-IN')} – ₹{totalMax.toLocaleString('en-IN')}</Text>
             </Text>
           </View>
           <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
@@ -449,9 +452,9 @@ export default function WalletScreen() {
             <View style={styles.emptyWalletIconCircle}>
               <Text style={{ fontSize: 36 }}>💳</Text>
             </View>
-            <Text style={styles.emptyWalletTitle}>Your Wallet is Empty</Text>
+            <Text style={styles.emptyWalletTitle}>{t.emptyTitle}</Text>
             <Text style={styles.emptyWalletSubtitle}>
-              Add the credit cards you currently hold to unlock personalized rewards calculations, statement due alerts, and swipe recommendations.
+              {t.emptySubtitle}
             </Text>
             <Pressable
               style={styles.addFirstCardButton}
@@ -459,14 +462,14 @@ export default function WalletScreen() {
               accessibilityRole="button"
               accessibilityLabel="Add your first card"
             >
-              <Text style={styles.addFirstCardButtonText}>+ Add Your First Card</Text>
+              <Text style={styles.addFirstCardButtonText}>{t.addFirstCard}</Text>
             </Pressable>
             <Pressable
               style={styles.findCardLink}
               onPress={() => router.push('/find-card')}
               accessibilityRole="button"
             >
-              <Text style={styles.findCardLinkText}>{"Don't have a card yet? Find your best card →"}</Text>
+              <Text style={styles.findCardLinkText}>{t.findCardLink}</Text>
             </Pressable>
           </View>
         ) : (
@@ -494,14 +497,14 @@ export default function WalletScreen() {
                 <Text style={styles.hintIcon}>💳</Text>
               </View>
               <Text style={styles.hintText}>
-                Swipe down to browse all cards. Swipe up to stack cards. Tap a card to open details.
+                {t.swipeHint}
               </Text>
             </Animated.View>
 
             {/* Rest of the Info (Below hint) */}
-            <Text style={styles.sectionTitle}>Your reward balances</Text>
+            <Text style={styles.sectionTitle}>{t.rewardBalances}</Text>
             <ExpiryBanner cards={cards} />
-            <PointsValueCard cards={cards} totalMin={totalMin} totalMax={totalMax} />
+            <PointsValueCard cards={cards} totalMin={totalMin} totalMax={totalMax} explainText={t.valueExplain} />
           </>
         )}
 

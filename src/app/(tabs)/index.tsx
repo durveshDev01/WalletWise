@@ -20,6 +20,7 @@ import { catalog } from '../../data/catalog';
 import { walletAlerts } from '../../engine';
 import { useBillReminderSync } from '../../hooks/useBillReminderSync';
 import { useCardStore } from '../../store/useCardStore';
+import { UI_STRINGS } from '../../services/appStrings';
 import { theme } from '../../theme';
 
 /** Days ahead that count as a "new alert" on the bell. */
@@ -67,16 +68,19 @@ export default function HomeScreen() {
   );
   const openWallet = useCallback(() => router.push('/wallet'), [router]);
 
+  const language = useCardStore((s) => s.auraLanguage ?? 'en');
+  const t = UI_STRINGS[language].home;
+
   const quickActions: QuickAction[] = useMemo(
     () => [
-      { key: 'find', title: 'Find Next Card', icon: 'sparkle', onPress: () => router.push('/find-card') },
-      { key: 'trip', title: 'Trip Planner', icon: 'plane', onPress: () => router.push('/trip-planner') },
-      { key: 'nearby', title: 'Best Card Nearby', icon: 'pin', onPress: () => router.push('/map') },
-      { key: 'add', title: 'Add a Card', icon: 'plus', onPress: () => router.push('/add-card') },
-      { key: 'bill', title: 'Bill Check', icon: 'rupee', onPress: () => router.push('/bill-check') },
-      { key: 'browse', title: 'Browse Cards', icon: 'search', onPress: () => router.push('/browse-cards') },
+      { key: 'find', title: t.findNextCard, icon: 'sparkle', onPress: () => router.push('/find-card') },
+      { key: 'trip', title: t.tripPlanner, icon: 'plane', onPress: () => router.push('/trip-planner') },
+      { key: 'nearby', title: t.bestCardNearby, icon: 'pin', onPress: () => router.push('/map') },
+      { key: 'add', title: t.addCard, icon: 'plus', onPress: () => router.push('/add-card') },
+      { key: 'bill', title: t.billCheck, icon: 'rupee', onPress: () => router.push('/bill-check') },
+      { key: 'browse', title: t.browseCards, icon: 'search', onPress: () => router.push('/browse-cards') },
     ],
-    [router],
+    [router, t],
   );
 
   return (
@@ -120,12 +124,12 @@ export default function HomeScreen() {
         <BillCheckBanner onPress={() => router.push('/bill-check')} />
 
         <View>
-          <SectionHeader title="Quick actions" />
+          <SectionHeader title={t.quickActions} />
           <QuickActions actions={quickActions} />
         </View>
 
         <View>
-          <SectionHeader title="Which card should I use?" />
+          <SectionHeader title={t.whichCard} />
           <CardCalculator cards={cards} onCompareNearby={() => router.push('/map')} />
         </View>
 
