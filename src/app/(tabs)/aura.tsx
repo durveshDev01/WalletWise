@@ -42,8 +42,7 @@ const plain = (text: string) =>
     .replace(/(^|\s)\*(?=\S)([^*\n]+)\*(?=\s|[.,;:!?]|$)/g, '$1$2')
     .replace(/^#{1,6}\s+/gm, '');
 
-let nextId = 0;
-const newId = () => `m${++nextId}`;
+const newId = () => `m-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 
 /** Three gold dots that pulse while Aura is working. */
 function TypingDots({ label }: { label: string }) {
@@ -82,7 +81,18 @@ export default function AuraScreen() {
   const handledQuery = useRef<string | undefined>(undefined);
 
   const [messages, setMessages] = useState<Message[]>(() => {
-    if (savedMessages && savedMessages.length > 0) return savedMessages;
+    if (savedMessages && savedMessages.length > 0) {
+      const seen = new Set<string>();
+      return savedMessages.map((m, index) => {
+        if (!m.id || seen.has(m.id)) {
+          const uniqueId = `m-${index}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+          seen.add(uniqueId);
+          return { ...m, id: uniqueId };
+        }
+        seen.add(m.id);
+        return m;
+      });
+    }
     return [{ id: 'welcome', role: 'assistant', content: '', state: 'done' }];
   });
   const [input, setInput] = useState('');
@@ -255,11 +265,11 @@ export default function AuraScreen() {
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
           keyboardShouldPersistTaps="handled"
         >
-          {messages.map((m) => {
+          {messages.map((m, idx) => {
             const isUser = m.role === 'user';
             const streamingEmpty = m.state === 'streaming' && !m.content;
             return (
-              <View key={m.id} style={[styles.row, isUser ? styles.rowUser : styles.rowAi]}>
+              <View key={`${m.id || 'msg'}-${idx}`} style={[styles.row, isUser ? styles.rowUser : styles.rowAi]}>
                 {!isUser && (
                   <View style={styles.avatar}>
                     <Icon name="sparkle" color={theme.colors.gold} size={theme.fontSize.caption} />

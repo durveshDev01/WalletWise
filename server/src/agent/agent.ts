@@ -63,7 +63,8 @@ export async function* runAgent(
   options: { signal?: AbortSignal; today?: string; language?: AuraLanguage; simple?: boolean } = {},
 ): AsyncGenerator<AgentEvent> {
   const today = options.today ?? new Date().toISOString().slice(0, 10);
-  const messages: ChatMessage[] = [{ role: 'system', content: buildSystemPrompt(today, options) }, ...conversation];
+  const trimmedConversation = conversation.slice(-config.maxTurns);
+  const messages: ChatMessage[] = [{ role: 'system', content: buildSystemPrompt(today, options) }, ...trimmedConversation];
 
   let cta: Cta | null = null;
   const ctx = { wallet, setCta: (c: Cta) => (cta = c) };

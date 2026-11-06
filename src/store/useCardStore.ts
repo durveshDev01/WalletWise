@@ -306,9 +306,12 @@ export const useCardStore = create<CardStore>()(
               if (autoExp) extra.expiryDate = autoExp;
             }
           }
-          // Keep samples visible until the user explicitly removes them.
-          const holdings = [...s.holdings, { ...newHolding(catalogId, lastFour, points), ...extra }];
-          return { holdings, cards: derive(holdings), isDemo: s.isDemo };
+          // If the wallet only holds the initial sample deck, adding the user's first real card
+          // clears the sample cards so their wallet is immediately clean and personal.
+          const nonSample = s.holdings.filter((h) => !isSampleHolding(h));
+          const newCard = { ...newHolding(catalogId, lastFour, points), ...extra };
+          const holdings = s.isDemo && nonSample.length === 0 ? [newCard] : [...s.holdings, newCard];
+          return { holdings, cards: derive(holdings), isDemo: false };
         }),
       updateHolding: (id, changes) =>
         set((s) => {
